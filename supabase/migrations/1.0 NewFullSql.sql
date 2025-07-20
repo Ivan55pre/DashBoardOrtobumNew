@@ -46,6 +46,50 @@ END;
 $$;
 
 
+-- Вспомогательные функции для RLS, чтобы избежать бесконечной рекурсии
+
+-- Функция для проверки, является ли пользователь членом организации.
+-- SECURITY DEFINER используется для обхода RLS вызывающего пользователя.
+CREATE OR REPLACE FUNCTION public.is_member_of(p_organization_id UUID, p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.organization_members om
+    WHERE om.organization_id = p_organization_id AND om.user_id = p_user_id
+  );
+$$;
+
+-- Функция для проверки, является ли пользователь администратором организации.
+-- SECURITY DEFINER используется для обхода RLS вызывающего пользователя.
+CREATE OR REPLACE FUNCTION public.is_admin_of(p_organization_id UUID, p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.organization_members om
+    WHERE om.organization_id = p_organization_id AND om.user_id = p_user_id AND om.role = 'admin'
+  );
+$$;
+
+-- Функция для проверки, пуста ли организация (нет ли в ней участников).
+-- SECURITY DEFINER используется для обхода RLS вызывающего пользователя.
+CREATE OR REPLACE FUNCTION public.is_organization_empty(p_organization_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT NOT EXISTS (SELECT 1 FROM public.organization_members om WHERE om.organization_id = p_organization_id);
+$$;
+
+
 -- Plan-fact reports items table
 create table plan_fact_reports_items (
   id uuid primary key default gen_random_uuid (),
@@ -238,12 +282,7 @@ ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view members of their own organizations."
 ON organization_members FOR SELECT
 USING (
-  EXISTS (
-    SELECT 1
-    FROM organization_members om
-    WHERE om.user_id = auth.uid()
-      AND om.organization_id = organization_members.organization_id
-  )
+  public.is_member_of(organization_members.organization_id, auth.uid())
 );
 
 -- Политика INSERT: Администраторы могут добавлять новых членов; пользователи могут присоединиться к новой (пустой) организации.
@@ -251,18 +290,13 @@ CREATE POLICY "Admins can add members; users can join a new org."
 ON organization_members FOR INSERT
 WITH CHECK (
   -- Условие 1: Текущий пользователь является администратором этой организации.
-  (EXISTS (
-    SELECT 1 FROM public.organization_members om
-    WHERE om.organization_id = organization_members.organization_id
-      AND om.user_id = auth.uid()
-      AND om.role = 'admin'
-  ))
+  (public.is_admin_of(organization_members.organization_id, auth.uid()))
   OR
   -- Условие 2: Пользователь добавляет сам себя в новую (пустую) организацию.
   -- Это позволяет создателю организации стать ее первым членом, которого триггер сделает администратором.
   (
     organization_members.user_id = auth.uid() AND
-    NOT EXISTS (SELECT 1 FROM public.organization_members om WHERE om.organization_id = organization_members.organization_id)
+    public.is_organization_empty(organization_members.organization_id)
   )
 );
 
@@ -270,18 +304,12 @@ WITH CHECK (
 CREATE POLICY "Admins can update member roles in their organization."
 ON organization_members FOR UPDATE
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.organization_members om
-    WHERE om.organization_id = organization_members.organization_id -- `organization_id` из обновляемой строки
-      AND om.user_id = auth.uid()
-      AND om.role = 'admin'
-  )
+  public.is_admin_of(organization_members.organization_id, auth.uid())
 )
 WITH CHECK (
   -- Нельзя понизить роль последнего администратора.
   -- Если пользователь является последним админом, его роль должна остаться 'admin'.
-  (NOT public.is_last_admin_in_organization(organization_id, user_id)) OR (role = 'admin')
+  (NOT public.is_last_admin_in_organization(organization_members.organization_id, organization_members.user_id)) OR (organization_members.role = 'admin')
 );
 
 -- Политика DELETE: Администраторы могут удалять участников, а любой участник может удалить себя.
@@ -291,12 +319,12 @@ USING (
   -- Разрешаем удаление, если...
   (
     -- ...текущий пользователь является администратором ИЛИ удаляет сам себя.
-    (EXISTS (SELECT 1 FROM public.organization_members om WHERE om.organization_id = organization_members.organization_id AND om.user_id = auth.uid() AND om.role = 'admin'))
-    OR (user_id = auth.uid())
+    public.is_admin_of(organization_members.organization_id, auth.uid())
+    OR (organization_members.user_id = auth.uid())
   )
   -- И при этом...
   -- ...удаляемый пользователь не является последним администратором в организации.
-  AND (NOT public.is_last_admin_in_organization(organization_id, user_id))
+  AND (NOT public.is_last_admin_in_organization(organization_members.organization_id, organization_members.user_id))
 );
 
 -- 1.5.1 auto_set_first_admin_trigger
