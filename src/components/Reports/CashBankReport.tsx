@@ -76,12 +76,14 @@ const CashBankReport: React.FC = () => {
         // Populate filter options
         const organizations = [...new Set(existingData
           .filter(item => item.level === 1)
-          .map(item => item.account_name))]
+          .map(item => item.account_name)
+          .filter((name): name is string => name !== null))]
         setAvailableOrganizations(organizations)
 
         const accounts = [...new Set(existingData
           .filter(item => item.level === 2)
-          .map(item => item.account_name))]
+          .map(item => item.account_name)
+          .filter((name): name is string => name !== null))]
         setAvailableAccounts(accounts)
 
         // Apply filters
@@ -128,14 +130,16 @@ const CashBankReport: React.FC = () => {
       
       // Populate filter options from sample data
       const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample //
+      const organizations = [...new Set(flatSample
         .filter(item => item.level === 1)
-        .map(item => item.account_name))]
+        .map(item => item.account_name)
+        .filter((name): name is string => name !== null))]
       setAvailableOrganizations(organizations)
 
       const accounts = [...new Set(flatSample
         .filter(item => item.level === 2)
-        .map(item => item.account_name))] //
+        .map(item => item.account_name)
+        .filter((name): name is string => name !== null))]
       setAvailableAccounts(accounts)
 
       // Apply filters to sample data
@@ -210,12 +214,14 @@ const CashBankReport: React.FC = () => {
       const flatSample = flattenHierarchy(sampleData)
       const organizations = [...new Set(flatSample
         .filter(item => item.level === 1)
-        .map(item => item.account_name))]
+        .map(item => item.account_name)
+        .filter((name): name is string => name !== null))]
       setAvailableOrganizations(organizations)
 
       const accounts = [...new Set(flatSample
         .filter(item => item.level === 2)
-        .map(item => item.account_name))]
+        .map(item => item.account_name)
+        .filter((name): name is string => name !== null))]
       setAvailableAccounts(accounts)
 
       setData(sampleData)
@@ -391,7 +397,7 @@ const CashBankReport: React.FC = () => {
     const roots: CashBankReportData[] = []
     if (!flatData || flatData.length === 0) return roots
 
-    const parentStack: CashBankReportData[] = []
+    const parentStack: (CashBankReportData & { children: CashBankReportData[] })[] = []
 
     // Data must be sorted by level
     const sortedData = [...flatData].sort((a, b) => a.level - b.level || (a.account_name || '').localeCompare(b.account_name || ''))
