@@ -1,16 +1,23 @@
 import React from 'react'
-import { Bell, Search, User, Moon, Sun } from 'lucide-react'
+import { Bell, Search, User, Moon, Sun, Menu } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onMenuButtonClick: () => void
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuButtonClick }) => {
   const { user, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
 
   return (
     <header className="bg-white dark:bg-dark-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between px-4 py-3 md:px-6">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-4">
+          <button onClick={onMenuButtonClick} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 md:hidden" aria-label="Open menu">
+            <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+          </button>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
             Business Dashboard
           </h1>

@@ -13,6 +13,7 @@ import Login from './pages/Login'
 import TelegramTurnoverReport from './pages/TelegramTurnoverReport'
 import TelegramDashboard from './pages/TelegramDashboard'
 import ProtectedRoute from './components/Auth/ProtectedRoute'
+import ProtectedLayout from './components/Layout/ProtectedLayout'
 
 function App() {
   return (
@@ -34,27 +35,12 @@ function App() {
                       <TelegramDashboard />
                     </ProtectedRoute>
                   } />
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Dashboard />
-                      </Layout>
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/reports" element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Reports />
-                      </Layout>
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/settings" element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Settings />
-                      </Layout>
-                    </ProtectedRoute>
-                  } />
+                  {/* Группа маршрутов, которые используют основной Layout и защищены */}
+                  <Route element={<ProtectedLayout />}>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Route>
                 </Routes>
               </div>
             </Router>

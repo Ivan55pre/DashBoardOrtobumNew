@@ -39,12 +39,26 @@ const TelegramDashboard: React.FC = () => {
   const loadDashboardData = async () => {
     setLoading(true)
     try {
+      // Шаг 1: Найти организацию, к которой принадлежит пользователь.
+      // Это ключевой шаг, так как все отчеты привязаны к организации.
+      const { data: orgMember, error: orgError } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user!.id)
+        .limit(1)
+        .single()
+
+      if (orgError || !orgMember) {
+        throw new Error('Пользователь не состоит в организации или не удалось ее найти.')
+      }
+      const organizationId = orgMember.organization_id
+
       // Загружаем данные из всех отчетов
       const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
-        loadCashBankData(),
-        loadDebtData(),
-        loadInventoryData(),
-        loadPlanFactData()
+        loadCashBankData(organizationId),
+        loadDebtData(organizationId),
+        loadInventoryData(organizationId),
+        loadPlanFactData(organizationId)
       ])
 
       const newDashboardData = {
@@ -78,75 +92,105 @@ const TelegramDashboard: React.FC = () => {
     }
   }
 
-  const loadCashBankData = async () => {
+  // Функция для поиска ID последнего отчета по типу и организации
+  const getLatestReportId = async (organizationId: string, reportType: string) => {
+    const { data: reportMeta, error: metaError } = await supabase
+      .from('report_metadata')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('report_type', reportType)
+      .order('report_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (metaError) throw metaError
+    return reportMeta?.id
+  }
+
+  const loadCashBankData = async (organizationId: string) => {
     try {
+      const reportId = await getLatestReportId(organizationId, 'cash_bank')
+      if (!reportId) return { total: 7413741, change: 5.2 } // fallback to demo
+
       const { data, error } = await supabase
-        .from('cash_bank_reports')
+        .from('cash_bank_report_items')
         .select('balance_current')
-        .eq('user_id', user?.id)
+        .eq('report_id', reportId)
         .eq('is_total_row', true)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
 
       return {
         total: data?.balance_current || 7413741,
-        change: 5.2
+        change: 5.2 // Динамику пока оставляем демо
       }
     } catch (error) {
+      console.error('Error loading cash bank data, using demo data.', error)
       return { total: 7413741, change: 5.2 }
     }
   }
 
-  const loadDebtData = async () => {
+  const loadDebtData = async (organizationId: string) => {
     try {
+      const reportId = await getLatestReportId(organizationId, 'debt') // Убедитесь, что тип отчета 'debt'
+      if (!reportId) return { total: 119919250, change: -2.1 }
+
       const { data, error } = await supabase
-        .from('debt_reports')
+        .from('debt_reports_items')
         .select('debt_amount')
-        .eq('user_id', user?.id)
+        .eq('report_id', reportId)
         .eq('is_total_row', true)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
 
       return {
         total: data?.debt_amount || 119919250,
-        change: -2.1
+        change: -2.1 // Динамику пока оставляем демо
       }
     } catch (error) {
+      console.error('Error loading debt data, using demo data.', error)
       return { total: 119919250, change: -2.1 }
     }
   }
 
-  const loadInventoryData = async () => {
+  const loadInventoryData = async (organizationId: string) => {
     try {
+      const reportId = await getLatestReportId(organizationId, 'inventory_turnover')
+      if (!reportId) return { total: 197635082, change: 16.42 }
+
       const { data, error } = await supabase
-        .from('inventory_balance_reports')
-        .select('sum_amount')
-        .eq('user_id', user?.id)
+        .from('inventory_turnover_report_items')
+        .select('balance_rub')
+        .eq('report_id', reportId)
         .eq('is_total_row', true)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
 
       return {
-        total: data?.sum_amount || 197635082,
-        change: 16.42
+        total: data?.balance_rub || 197635082,
+        change: 16.42 // Динамику пока оставляем демо
       }
     } catch (error) {
+      console.error('Error loading inventory data, using demo data.', error)
       return { total: 197635082, change: 16.42 }
     }
   }
 
-  const loadPlanFactData = async () => {
+  const loadPlanFactData = async (organizationId: string) => {
     try {
+      const reportId = await getLatestReportId(organizationId, 'plan_fact')
+      if (!reportId) return { execution: 71.9, change: -8.1 }
+
       const { data, error } = await supabase
-        .from('plan_fact_revenue_reports')
+        .from('plan_fact_reports_items')
         .select('execution_percent')
-        .eq('user_id', user?.id)
+        .eq('report_id', reportId)
+        .eq('period_type', 'month') // Уточняем, что нам нужен итог за месяц
         .eq('is_total_row', true)
-        .eq('period_type', 'month')
-        .single()
+        .maybeSingle()
 
       if (error) throw error
 
@@ -155,6 +199,7 @@ const TelegramDashboard: React.FC = () => {
         change: -8.1
       }
     } catch (error) {
+      console.error('Error loading plan-fact data, using demo data.', error)
       return { execution: 71.9, change: -8.1 }
     }
   }

@@ -1,21 +1,46 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { BarChart3, FileText, Settings, Home } from 'lucide-react'
+import { BarChart3, FileText, Settings, Home, X } from 'lucide-react'
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean
+  setIsOpen: (isOpen: boolean) => void
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const navItems = [
     { to: '/', icon: Home, label: 'Dashboard' },
     { to: '/reports', icon: FileText, label: 'Отчеты' },
     { to: '/settings', icon: Settings, label: 'Настройки' },
   ]
 
+  const sidebarClasses = `
+    bg-white dark:bg-dark-800 shadow-sm border-r border-gray-200 dark:border-gray-700
+    transition-transform duration-300 ease-in-out
+    md:w-64 md:relative md:translate-x-0
+    fixed inset-y-0 left-0 z-30 w-64
+    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+  `
+
   return (
-    <aside className="w-64 bg-white dark:bg-dark-800 shadow-sm border-r border-gray-200 dark:border-gray-700 hidden md:block">
-      <div className="p-6">
+    <>
+      {/* Overlay for mobile to close sidebar on click */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+          onClick={() => setIsOpen(false)}
+        ></div>
+      )}
+
+      <aside className={sidebarClasses}>
+        <div className="flex items-center justify-between p-6">
         <div className="flex items-center space-x-2">
           <BarChart3 className="w-8 h-8 text-primary-500" />
           <span className="text-xl font-bold text-gray-900 dark:text-white">Analytics</span>
         </div>
+          <button onClick={() => setIsOpen(false)} className="p-1 md:hidden" aria-label="Close menu">
+            <X className="w-6 h-6 text-gray-500" />
+          </button>
       </div>
       
       <nav className="mt-8">
@@ -34,7 +59,8 @@ const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
-    </aside>
+      </aside>
+    </>
   )
 }
 
