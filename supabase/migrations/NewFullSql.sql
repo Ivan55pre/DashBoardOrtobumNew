@@ -57,6 +57,36 @@ create table plan_fact_reports_items (
   created_at timestamptz default now() not null
 );
 
+-- Alter table to add missing columns for hierarchy and RLS
+ALTER TABLE public.plan_fact_reports_items
+  ADD COLUMN IF NOT EXISTS category_name TEXT,
+  ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.plan_fact_reports_items(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS period_type TEXT,
+  ADD COLUMN IF NOT EXISTS level INTEGER,
+  ADD COLUMN IF NOT EXISTS is_expandable BOOLEAN;
+
+ALTER TABLE public.plan_fact_reports_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow members to read their organization's plan-fact items"
+ON public.plan_fact_reports_items FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM report_metadata rm
+    JOIN organization_members om ON rm.organization_id = om.organization_id
+    WHERE rm.id = plan_fact_reports_items.report_id AND om.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Allow admins to manage plan-fact items"
+ON public.plan_fact_reports_items FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM report_metadata rm
+    JOIN organization_members om ON rm.organization_id = om.organization_id
+    WHERE rm.id = plan_fact_reports_items.report_id AND om.user_id = auth.uid() AND om.role = 'admin'
+  )
+);
+
 -- Function and trigger for plan-fact reports items timestamp
 create or replace function public.update_plan_fact_reports_items_timestamp () returns trigger as $$
 BEGIN
@@ -943,73 +973,6 @@ BEGIN
       AND EXTRACT(MONTH FROM rm.report_date) = p_month
       AND cbr.is_total_row = FALSE
     GROUP BY account_type;
-END;
-$$ LANGUAGE plpgsql;
-
--- 3 Пользовательские функции для других перед void
-
--- Функции для работы с отчетностью
-CREATE OR REPLACE FUNCTION public.upsert_debt_report(
-  report_id uuid,
-  organization_id uuid,
-  report_date date,
-  client_name text,
-  debt_amount numeric,
-  overdue_amount numeric,
-  credit_amount numeric
-) RETURNS void AS $$
-BEGIN
-    -- Insert or update the debt report
-    INSERT INTO debt_reports_items (id, report_id, client_name, debt_amount, overdue_amount, credit_amount, is_total_row)
-    VALUES (gen_random_uuid(), report_id, client_name, debt_amount, overdue_amount, credit_amount, FALSE)
-    ON CONFLICT (report_id, client_name) DO UPDATE
-    SET debt_amount = EXCLUDED.debt_amount,
-        overdue_amount = EXCLUDED.overdue_amount,
-        credit_amount = EXCLUDED.credit_amount;
-
-    -- Update the monthly summary
-    INSERT INTO debt_monthly_summaries (organization_id, year, month, client_name, total_debt, total_overdue, total_credit)
-    VALUES (organization_id, EXTRACT(YEAR FROM report_date), EXTRACT(MONTH FROM report_date), client_name, debt_amount, overdue_amount, credit_amount)
-    ON CONFLICT (organization_id, year, month, client_name) DO UPDATE
-    SET total_debt = debt_monthly_summaries.total_debt + EXCLUDED.total_debt,
-        total_overdue = debt_monthly_summaries.total_overdue + EXCLUDED.total_overdue,
-        total_credit = debt_monthly_summaries.total_credit + EXCLUDED.total_credit;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION public.upsert_plan_fact_report(
-  report_id uuid,
-  organization_id uuid,
-  report_date date,
-  category_name text,
-  plan_amount numeric,
-  fact_amount numeric
-) RETURNS void AS $$
-DECLARE
-    execution_percent NUMERIC;
-BEGIN
-    -- Calculate execution percent
-    IF plan_amount > 0 THEN
-        execution_percent := (fact_amount / plan_amount) * 100;
-    ELSE
-        execution_percent := 0;
-    END IF;
-
-    -- Insert or update the plan-fact report
-    INSERT INTO plan_fact_reports_items (id, report_id, category_name, plan_amount, fact_amount, execution_percent, is_total_row)
-    VALUES (gen_random_uuid(), report_id, category_name, plan_amount, fact_amount, execution_percent, FALSE)
-    ON CONFLICT (report_id, category_name) DO UPDATE
-    SET plan_amount = EXCLUDED.plan_amount,
-        fact_amount = EXCLUDED.fact_amount,
-        execution_percent = EXCLUDED.execution_percent;
-
-    -- Update the monthly summary
-    INSERT INTO plan_fact_monthly_summaries (organization_id, year, month, category_name, total_plan, total_fact, execution_percent)
-    VALUES (organization_id, EXTRACT(YEAR FROM report_date), EXTRACT(MONTH FROM report_date), category_name, plan_amount, fact_amount, execution_percent)
-    ON CONFLICT (organization_id, year, month, category_name) DO UPDATE
-    SET total_plan = plan_fact_monthly_summaries.total_plan + EXCLUDED.total_plan,
-        total_fact = plan_fact_monthly_summaries.total_fact + EXCLUDED.total_fact,
-        execution_percent = (plan_fact_monthly_summaries.total_fact + EXCLUDED.total_fact) / NULLIF(plan_fact_monthly_summaries.total_plan + EXCLUDED.total_plan, 0) * 100;
 END;
 $$ LANGUAGE plpgsql;
 
