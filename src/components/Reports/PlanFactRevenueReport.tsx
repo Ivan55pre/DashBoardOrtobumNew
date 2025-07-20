@@ -59,99 +59,127 @@ const PlanFactRevenueReport: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const { data: existingData, error } = await supabase
-        .from('plan_fact_revenue_reports')
-        .select('*')
+      // 1. Get user's organizations to populate the filter dropdown
+      const { data: orgMembers, error: memberError } = await supabase
+        .from('organization_members')
+        .select('organizations(id, name)')
+        .eq('user_id', user.id)
+
+      if (memberError) throw memberError;
+
+      const userOrgs = (orgMembers || [])
+        .map(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
+
+      if (userOrgs.length > 0) {
+        setAvailableOrganizations(userOrgs.map(o => o.name))
+      }
+
+      // 2. Determine which organization to show data for
+      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
+      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+
+      if (!targetOrg) {
+        throw new Error("No organization selected or user has no organizations.")
+      }
+
+      // 3. Get report metadata for the selected organization and date
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .eq('organization_id', targetOrg.id)
+        .eq('report_type', 'plan_fact') // Report type for plan-fact
         .eq('report_date', reportDate)
-        .order('level')
-        .order('category_name')
+        .maybeSingle()
 
-      if (error) throw error
+      if (metaError) throw metaError
 
-      if (existingData && existingData.length > 0) {
-        // Populate filter options
-        const organizations = [...new Set(existingData
-          .filter(item => item.level === 1)
-          .map(item => item.category_name))]
-        setAvailableOrganizations(organizations)
+      if (reportMeta?.id) {
+        // 4. Get report items if metadata exists
+        const { data: reportItems, error: itemsError } = await supabase
+          .from('plan_fact_reports_items')
+          .select('*')
+          .eq('report_id', reportMeta.id)
+          .order('level')
+          .order('category_name')
 
-        // Apply filters
-        let filteredData = existingData
-        
-        if (selectedOrganization) {
-          filteredData = filteredData.filter(item => 
-            item.category_name === selectedOrganization || 
-            item.is_total_row ||
-            (item.level > 1 && existingData.some(parent => 
-              parent.id === item.parent_id && 
-              parent.category_name === selectedOrganization
-            ))
-          )
-        }
+        if (itemsError) throw itemsError
 
-        const hierarchyData = buildHierarchy(filteredData)
+        // Since we are fetching data for a specific org, we don't need to filter by org name here.
+        // The data is already scoped.
+        const hierarchyData = buildHierarchy(reportItems || [])
         setData(hierarchyData)
         
-        // Set initial expanded rows for loaded data
         const initialExpanded = new Set<string>()
-        filteredData.forEach(item => {
+        ;(reportItems || []).forEach(item => {
           if (item.level <= 2) {
             initialExpanded.add(item.id)
           }
         })
         setExpandedRows(initialExpanded)
       } else {
-        // Данных нет, используем демо-данные
-        console.warn("No data found in plan_fact_revenue_reports for this date. Falling back to sample data.")
+        console.warn(`No plan-fact report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
         loadSampleData()
       }
     } catch (error) {
       console.error('Error loading data:', error)
-      // Показываем демо-данные в случае ошибки
-      const sampleData = getSampleData()
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.category_name))]
-      setAvailableOrganizations(organizations)
-
-      // Apply filters to sample data
-      let filteredSample = flatSample
-      
-      if (selectedOrganization) {
-        filteredSample = filteredSample.filter(item => 
-          item.category_name === selectedOrganization || 
-          item.is_total_row ||
-          (item.level > 1 && flatSample.some(parent => 
-            parent.id === item.parent_id && 
-            parent.category_name === selectedOrganization
-          ))
-        )
-      }
-
-      const hierarchyData = buildHierarchy(filteredSample)
-      setData(hierarchyData)
-      
-      // Set initial expanded rows for sample data
-      const initialExpanded = new Set<string>()
-      filteredSample.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
+      loadSampleData()
     } finally {
       setLoading(false)
     }
   }
 
   const loadSampleData = () => {
-    const sampleData = getSampleData();
-    const hierarchyData = buildHierarchy(flattenHierarchy(sampleData));
-    setData(hierarchyData);
+    setLoading(true)
+    const sampleData = getSampleData()
+    const flatSample = flattenHierarchy(sampleData)
+
+    // Populate filter options from sample data
+    const organizations = [...new Set(flatSample
+      .filter(item => item.level === 1)
+      .map(item => item.category_name))]
+    setAvailableOrganizations(organizations)
+
+    // Apply filters to sample data
+    let filteredSample = flatSample
+    
+    if (selectedOrganization) {
+      // This is a simplified filter logic for sample data
+      const orgRoot = sampleData.find(org => org.category_name === selectedOrganization);
+      if (orgRoot) {
+        const orgAndChildrenIds = new Set<string>();
+        const collectIds = (item: PlanFactRevenueData) => {
+            orgAndChildrenIds.add(item.id);
+            if (item.children) {
+                item.children.forEach(collectIds);
+            }
+        };
+        collectIds(orgRoot);
+        
+        filteredSample = flatSample.filter(item => 
+            item.is_total_row || orgAndChildrenIds.has(item.id)
+        );
+      }
+    }
+
+    const hierarchyData = buildHierarchy(filteredSample)
+    setData(hierarchyData)
+    
+    // Set initial expanded rows for sample data
+    const initialExpanded = new Set<string>()
+    filteredSample.forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
+      }
+    })
+    setExpandedRows(initialExpanded)
+    setLoading(false)
   }
 
   const flattenHierarchy = (items: PlanFactRevenueData[]): PlanFactRevenueData[] => {
@@ -358,7 +386,7 @@ const PlanFactRevenueReport: React.FC = () => {
     const roots: PlanFactRevenueData[] = []
     if (!flatData || flatData.length === 0) return roots
 
-    const parentStack: PlanFactRevenueData[] = []
+    const parentStack: (PlanFactRevenueData & { children: PlanFactRevenueData[] })[] = []
 
     // Data must be sorted by level
     const sortedData = [...flatData].sort((a, b) => a.level - b.level || a.category_name.localeCompare(b.category_name))
