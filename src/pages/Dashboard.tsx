@@ -244,6 +244,7 @@ const Dashboard: React.FC = () => {
         .from('plan_fact_reports_items')
         .select('execution_percent')
         .eq('report_id', reportMeta.id)
+        .eq('period_type', 'month') // Уточняем, что нам нужен итог за месяц
         .eq('is_total_row', true)
         .maybeSingle()
 

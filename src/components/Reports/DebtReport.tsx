@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 
 interface DebtReportData {
   id: string
-  organization_name: string
+  client_name: string
   parent_client_id: string | null
   debt_amount: number
   overdue_amount: number
@@ -61,127 +61,156 @@ const DebtReport: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const { data: existingData, error } = await supabase
-        .from('debt_reports')
-        .select('*')
+      // 1. Get user's organizations to populate the filter dropdown
+      const { data: orgMembers, error: memberError } = await supabase
+        .from('organization_members')
+        .select('organizations(id, name)')
+        .eq('user_id', user.id)
+
+      if (memberError) throw memberError;
+
+      const userOrgs = (orgMembers || [])
+        .map(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
+
+      if (userOrgs.length > 0) {
+        setAvailableOrganizations(userOrgs.map(o => o.name))
+      }
+
+      // 2. Determine which organization to show data for
+      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
+      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+
+      if (!targetOrg) {
+        throw new Error("No organization selected or user has no organizations.")
+      }
+
+      // 3. Get report metadata for the selected organization and date
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .eq('organization_id', targetOrg.id)
+        .eq('report_type', 'debt') // Report type for debt
         .eq('report_date', reportDate)
-        .order('level')
-        .order('organization_name')
+        .maybeSingle()
 
-      if (error) throw error
+      if (metaError) throw metaError
 
-      if (existingData && existingData.length > 0) {
-        // Populate filter options
-        const organizations = [...new Set(existingData
-          .filter(item => item.level === 1)
-          .map(item => item.organization_name))]
-        setAvailableOrganizations(organizations)
+      if (reportMeta?.id) {
+        // 4. Get report items if metadata exists
+        const { data: reportItems, error: itemsError } = await supabase
+          .from('debt_reports_items')
+          .select('*')
+          .eq('report_id', reportMeta.id)
+          .order('level')
+          .order('client_name')
 
-        const customers = [...new Set(existingData
-          .filter(item => item.organization_type === 'buyer' && item.level >= 3)
-          .map(item => item.organization_name))]
+        if (itemsError) throw itemsError
+
+        // Populate customer filter from loaded data.
+        // Note: 'organization_type' is not in the DB table, so we take all level 3+ items.
+        const customers = [...new Set((reportItems || [])
+          .filter(item => item.level >= 3)
+          .map(item => item.client_name))]
         setAvailableCustomers(customers)
 
-        // Apply filters
-        let filteredData = existingData
-        
-        if (selectedOrganization) {
-          filteredData = filteredData.filter(item => 
-            item.organization_name === selectedOrganization || 
-            item.is_total_row ||
-            (item.level > 1 && existingData.some(parent => 
-              parent.id === item.parent_client_id && 
-              parent.organization_name === selectedOrganization
-            ))
-          )
-        }
-
+        let filteredData = reportItems || []
         if (selectedCustomer) {
+          // This filter logic might need adjustment as organization_type is not available in DB data
           filteredData = filteredData.filter(item => 
-            item.organization_name === selectedCustomer || 
+            item.client_name === selectedCustomer || 
             item.is_total_row ||
-            item.level <= 2 ||
-            item.organization_type !== 'buyer'
+            item.level <= 2
           )
         }
-
+        
         const hierarchyData = buildHierarchy(filteredData)
         setData(hierarchyData)
         
-        // Set initial expanded rows for loaded data
         const initialExpanded = new Set<string>()
-        filteredData.forEach(item => {
+        ;(filteredData || []).forEach(item => {
           if (item.level <= 2) {
             initialExpanded.add(item.id)
           }
         })
         setExpandedRows(initialExpanded)
       } else {
-        // Данных нет, используем демо-данные
-        console.warn("No data found in debt_reports for this date. Falling back to sample data.")
+        console.warn(`No debt report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
         loadSampleData()
       }
     } catch (error) {
       console.error('Error loading data:', error)
-      // Показываем демо-данные в случае ошибки
-      const sampleData = getSampleData()
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.organization_name))]
-      setAvailableOrganizations(organizations)
-
-      const customers = [...new Set(flatSample
-        .filter(item => item.organization_type === 'buyer' && item.level >= 3)
-        .map(item => item.organization_name))]
-      setAvailableCustomers(customers)
-
-      // Apply filters to sample data
-      let filteredSample = flatSample
-      
-      if (selectedOrganization) {
-        filteredSample = filteredSample.filter(item => 
-          item.organization_name === selectedOrganization || 
-          item.is_total_row ||
-          (item.level > 1 && flatSample.some(parent => 
-            parent.id === item.parent_client_id && 
-            parent.organization_name === selectedOrganization
-          ))
-        )
-      }
-
-      if (selectedCustomer) {
-        filteredSample = filteredSample.filter(item => 
-          item.organization_name === selectedCustomer || 
-          item.is_total_row ||
-          item.level <= 2 ||
-          item.organization_type !== 'buyer'
-        )
-      }
-
-      const hierarchyData = buildHierarchy(filteredSample)
-      setData(hierarchyData)
-      
-      // Set initial expanded rows for sample data
-      const initialExpanded = new Set<string>()
-      filteredSample.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
+      loadSampleData()
     } finally {
       setLoading(false)
     }
   }
 
   const loadSampleData = () => {
-    const sampleData = getSampleData();
-    const hierarchyData = buildHierarchy(flattenHierarchy(sampleData));
-    setData(hierarchyData);
+    setLoading(true)
+    const sampleData = getSampleData()
+    const flatSample = flattenHierarchy(sampleData)
+
+    // Populate filter options from sample data
+    const organizations = [...new Set(flatSample
+      .filter(item => item.level === 1)
+      .map(item => item.client_name))]
+    setAvailableOrganizations(organizations)
+
+    const customers = [...new Set(flatSample
+      .filter(item => item.organization_type === 'buyer' && item.level >= 3)
+      .map(item => item.client_name))]
+    setAvailableCustomers(customers)
+
+    // Apply filters to sample data
+    let filteredSample = flatSample
+    
+    if (selectedOrganization) {
+      // This is a simplified filter logic for sample data
+      const orgRoot = sampleData.find(org => org.client_name === selectedOrganization);
+      if (orgRoot) {
+        const orgAndChildrenIds = new Set<string>();
+        const collectIds = (item: DebtReportData) => {
+            orgAndChildrenIds.add(item.id);
+            if (item.children) {
+                item.children.forEach(collectIds);
+            }
+        };
+        collectIds(orgRoot);
+        
+        filteredSample = flatSample.filter(item => 
+            item.is_total_row || orgAndChildrenIds.has(item.id)
+        );
+      }
+    }
+
+    if (selectedCustomer) {
+      filteredSample = filteredSample.filter(item => 
+        item.client_name === selectedCustomer || 
+        item.is_total_row ||
+        item.level <= 2 ||
+        item.organization_type !== 'buyer'
+      )
+    }
+
+    const hierarchyData = buildHierarchy(filteredSample)
+    setData(hierarchyData)
+    
+    // Set initial expanded rows for sample data
+    const initialExpanded = new Set<string>()
+    filteredSample.forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
+      }
+    })
+    setExpandedRows(initialExpanded)
+    setLoading(false)
   }
 
   const flattenHierarchy = (items: DebtReportData[]): DebtReportData[] => {
@@ -216,7 +245,7 @@ const DebtReport: React.FC = () => {
     return [
       {
         id: uuid1,
-        organization_name: 'Итого',
+        client_name: 'Итого',
         parent_client_id: null,
         debt_amount: 119919250,
         overdue_amount: 4738064,
@@ -228,7 +257,7 @@ const DebtReport: React.FC = () => {
         children: [
           {
             id: uuid2,
-            organization_name: 'Маркова-Дорей Ю.В. ИП',
+            client_name: 'Маркова-Дорей Ю.В. ИП',
             parent_client_id: uuid1,
             debt_amount: 4703875,
             overdue_amount: 0,
@@ -240,7 +269,7 @@ const DebtReport: React.FC = () => {
             children: [
               {
                 id: uuid3,
-                organization_name: 'ПОКУПАТЕЛИ (сч. 62)',
+                client_name: 'ПОКУПАТЕЛИ (сч. 62)',
                 parent_client_id: uuid2,
                 debt_amount: 1788890,
                 overdue_amount: 0,
@@ -252,7 +281,7 @@ const DebtReport: React.FC = () => {
                 children: [
                   {
                     id: uuid4,
-                    organization_name: 'Физическое лицо',
+                    client_name: 'Физическое лицо',
                     parent_client_id: uuid3,
                     debt_amount: 1403000,
                     overdue_amount: 0,
@@ -264,7 +293,7 @@ const DebtReport: React.FC = () => {
                   },
                   {
                     id: uuid5,
-                    organization_name: 'ЦПО ООО',
+                    client_name: 'ЦПО ООО',
                     parent_client_id: uuid3,
                     debt_amount: 267650,
                     overdue_amount: 0,
@@ -278,7 +307,7 @@ const DebtReport: React.FC = () => {
               },
               {
                 id: uuid6,
-                organization_name: 'ПОСТАВЩИКИ (сч. 60)',
+                client_name: 'ПОСТАВЩИКИ (сч. 60)',
                 parent_client_id: uuid2,
                 debt_amount: 2990937,
                 overdue_amount: 0,
@@ -290,7 +319,7 @@ const DebtReport: React.FC = () => {
                 children: [
                   {
                     id: uuid7,
-                    organization_name: 'Сатурн ООО Аренда',
+                    client_name: 'Сатурн ООО Аренда',
                     parent_client_id: uuid6,
                     debt_amount: 372240,
                     overdue_amount: 0,
@@ -302,7 +331,7 @@ const DebtReport: React.FC = () => {
                   },
                   {
                     id: uuid8,
-                    organization_name: 'ИНВЕСТ НЕДВИЖИМОСТЬ ООО',
+                    client_name: 'ИНВЕСТ НЕДВИЖИМОСТЬ ООО',
                     parent_client_id: uuid6,
                     debt_amount: 224624,
                     overdue_amount: 0,
@@ -318,7 +347,7 @@ const DebtReport: React.FC = () => {
           },
           {
             id: uuid9,
-            organization_name: 'ООО "ОРТОБУМ"',
+            client_name: 'ООО "ОРТОБУМ"',
             parent_client_id: uuid1,
             debt_amount: 115233221,
             overdue_amount: 4738064,
@@ -330,7 +359,7 @@ const DebtReport: React.FC = () => {
             children: [
               {
                 id: uuid10,
-                organization_name: 'ПОКУПАТЕЛИ (сч. 62)',
+                client_name: 'ПОКУПАТЕЛИ (сч. 62)',
                 parent_client_id: uuid9,
                 debt_amount: 27639598,
                 overdue_amount: 4738064,
@@ -400,7 +429,7 @@ const DebtReport: React.FC = () => {
     const flattenData = (items: DebtReportData[], result: any[] = []): any[] => {
       items.forEach(item => {
         result.push([
-          item.organization_name,
+          item.client_name,
           item.debt_amount,
           item.overdue_amount,
           item.credit_amount
@@ -457,7 +486,7 @@ const DebtReport: React.FC = () => {
                   <h3 className={`text-sm font-medium text-gray-900 ${
                     item.is_total_row ? 'font-bold' : ''
                   } ${item.is_group_row ? 'text-blue-700' : ''}`}>
-                    {item.organization_name}
+                    {item.client_name}
                   </h3>
                 </div>
               </div>
@@ -518,7 +547,7 @@ const DebtReport: React.FC = () => {
               <span className={`${item.is_total_row ? 'font-bold' : ''} ${
                 item.is_group_row ? 'font-medium text-blue-700 dark:text-blue-300' : ''
               } ${item.level > 0 ? 'text-gray-700 dark:text-gray-300' : ''}`}>
-                {item.organization_name}
+                {item.client_name}
               </span>
             </div>
           </td>
