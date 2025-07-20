@@ -1173,3 +1173,8 @@ BEGIN
     RETURN v_org_id;
 END;
 $$;
+
+-- 20.07.25
+-- ограничение уникальности
+ALTER TABLE public.organization_members
+ADD CONSTRAINT organization_members_organization_id_user_id_key UNIQUE (organization_id, user_id);

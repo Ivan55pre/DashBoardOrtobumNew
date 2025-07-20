@@ -103,26 +103,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Failed to get user data after invitation.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Добавление пользователя в organization_members
-    const { error: insertError } = await supabaseAdmin
+    // Добавление или обновление пользователя в organization_members (Upsert).
+    // Этот подход атомарно добавляет пользователя, если его нет, или обновляет его роль, если он уже существует.
+    const { error: upsertError } = await supabaseAdmin
       .from('organization_members')
-      .insert({
+      .upsert({
         organization_id: organization_id,
         user_id: invitedUser.id,
         role: role,
+      }, {
+        onConflict: 'organization_id, user_id', // Указываем колонки для проверки конфликта
       })
 
-    if (insertError) {
-      if (insertError.code === '23505') {
-        return new Response(JSON.stringify({ error: 'User is already a member of this organization.' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 409,
-        })
-      }
-      return new Response(JSON.stringify({ error: `Database error: ${insertError.message}` }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (upsertError) {
+      return new Response(JSON.stringify({ error: `Database error: ${upsertError.message}` }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    return new Response(JSON.stringify({ message: `User ${email_to_invite} has been successfully added to the organization.` }), {
+    return new Response(JSON.stringify({ message: `User ${email_to_invite} has been successfully added or updated in the organization.` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
