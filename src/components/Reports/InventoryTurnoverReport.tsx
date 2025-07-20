@@ -62,84 +62,81 @@ const InventoryTurnoverReport: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const { data: existingData, error } = await supabase
-        .from('inventory_turnover_reports')
-        .select('*')
+      // 1. Get user's organizations to populate the filter dropdown
+      const { data: orgMembers, error: memberError } = await supabase
+        .from('organization_members')
+        .select('organizations(id, name)')
+        .eq('user_id', user.id)
+
+      if (memberError) throw memberError;
+
+      const userOrgs = (orgMembers || [])
+        .flatMap(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
+
+      if (userOrgs.length > 0) {
+        setAvailableOrganizations(userOrgs.map(o => o.name))
+      }
+
+      // 2. Determine which organization to show data for
+      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
+      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+
+      if (!targetOrg) {
+        throw new Error("No organization selected or user has no organizations.")
+      }
+
+      // 3. Get report metadata for the selected organization and date
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .eq('organization_id', targetOrg.id)
+        .eq('report_type', 'inventory_turnover')
         .eq('report_date', reportDate)
-        .order('level')
-        .order('category_name')
+        .maybeSingle()
 
-      if (error) throw error
+      if (metaError) throw metaError
 
-      if (existingData && existingData.length > 0) {
-        // Populate filter options
-        const organizations = [...new Set(existingData
-          .filter(item => item.level === 1)
-          .map(item => item.organization_name))]
-        setAvailableOrganizations(organizations)
+      if (reportMeta?.id) {
+        // 4. Get report items if metadata exists
+        const { data: reportItems, error: itemsError } = await supabase
+          .from('inventory_turnover_report_items')
+          .select('*')
+          .eq('report_id', reportMeta.id)
+          .order('level')
+          .order('category_name')
 
-        // Apply filters
-        let filteredData = existingData
-        
-        if (selectedOrganization) {
-          filteredData = filteredData.filter(item => 
-            item.organization_name === selectedOrganization || 
-            item.is_total_row ||
-            (item.level > 1 && existingData.some(parent => 
-              parent.id === item.parent_category_id && 
-              parent.organization_name === selectedOrganization
-            ))
-          )
-        }
+        if (itemsError) throw itemsError
 
-        const hierarchyData = buildHierarchy(filteredData)
+        const hierarchyData = buildHierarchy(reportItems || [])
         setData(hierarchyData)
         
-        // Set initial expanded rows for loaded data
         const initialExpanded = new Set<string>()
-        filteredData.forEach(item => {
+        ;(reportItems || []).forEach(item => {
           if (item.level <= 2) {
             initialExpanded.add(item.id)
           }
         })
         setExpandedRows(initialExpanded)
       } else {
-        // Создаем демо-данные если их нет
-        await createSampleData()
+        // No report for this date/org, create sample data for the selected org
+        await createSampleData(targetOrg.name)
       }
     } catch (error) {
       console.error('Error loading data:', error)
       // Показываем демо-данные в случае ошибки
       const sampleData = getSampleData()
       
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.organization_name))]
-      setAvailableOrganizations(organizations)
-
-      // Apply filters to sample data
-      let filteredSample = flatSample
+      setData(sampleData)
       
-      if (selectedOrganization) {
-        filteredSample = filteredSample.filter(item => 
-          item.organization_name === selectedOrganization || 
-          item.is_total_row ||
-          (item.level > 1 && flatSample.some(parent => 
-            parent.id === item.parent_category_id && 
-            parent.organization_name === selectedOrganization
-          ))
-        )
-      }
-
-      const hierarchyData = buildHierarchy(filteredSample)
-      setData(hierarchyData)
-      
-      // Set initial expanded rows for sample data
       const initialExpanded = new Set<string>()
-      filteredSample.forEach(item => {
+      flattenHierarchy(sampleData).forEach(item => {
         if (item.level <= 2) {
           initialExpanded.add(item.id)
         }
