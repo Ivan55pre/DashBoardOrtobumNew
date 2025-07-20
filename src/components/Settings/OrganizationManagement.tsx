@@ -91,27 +91,23 @@ const OrganizationManagement: React.FC = () => {
 
   const handleCreateOrganization = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !newOrgName.trim()) return
+    if (!user || !newOrgName.trim()) return;
+    setError(null);
 
     try {
-      const { data: newOrg, error: orgError } = await supabase
-        .from('organizations')
-        .insert({ name: newOrgName.trim() })
-        .select()
-        .single()
+      const { data: newOrgId, error } = await supabase.rpc('create_organization_and_add_creator', {
+        p_org_name: newOrgName.trim(),
+      });
 
-      if (orgError) throw orgError
+      if (error) throw error;
 
-      const { error: memberError } = await supabase
-        .from('organization_members')
-        .insert({ organization_id: newOrg.id, user_id: user.id, role: 'member' })
+      const newOrg = { id: newOrgId, name: newOrgName.trim() };
 
-      if (memberError) throw memberError
-
+      // Обновляем состояние без дополнительного запроса к БД
       setShowCreateOrgModal(false)
       setNewOrgName('')
-      await fetchOrganizations()
-      setSelectedOrg(newOrg)
+      setOrganizations(prevOrgs => [...prevOrgs, newOrg]);
+      setSelectedOrg(newOrg);
     } catch (e: any) {
       setError(`Ошибка создания организации: ${e.message}`)
     }
