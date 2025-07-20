@@ -74,7 +74,7 @@ const PlanFactRevenueReport: React.FC = () => {
       if (memberError) throw memberError;
 
       const userOrgs = (orgMembers || [])
-        .map(m => m.organizations)
+        .flatMap(m => m.organizations)
         .filter(Boolean) as { id: string; name: string }[]
 
       if (userOrgs.length > 0) {
