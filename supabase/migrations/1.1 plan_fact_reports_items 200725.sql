@@ -1,4 +1,4 @@
-
+-- добавляет столбцы
 -- Alter table to add missing columns for hierarchy and RLS
 ALTER TABLE public.plan_fact_reports_items
   ADD COLUMN IF NOT EXISTS category_name TEXT,

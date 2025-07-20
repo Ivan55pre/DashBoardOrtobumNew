@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../contexts/AuthContext'
-import { Plus, Trash2, Users, ChevronDown, LogOut, Shield, ShieldOff, Building } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Building } from 'lucide-react'
 
 interface Organization {
   id: string
