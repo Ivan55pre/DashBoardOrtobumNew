@@ -124,8 +124,8 @@ const PlanFactRevenueReport: React.FC = () => {
         })
         setExpandedRows(initialExpanded)
       } else {
-        console.warn(`No plan-fact report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
-        loadSampleData()
+        console.warn(`No plan-fact report found for ${targetOrg.name} on ${reportDate}. Creating and loading sample data.`)
+        await createSampleData(targetOrg.name)
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -133,6 +133,52 @@ const PlanFactRevenueReport: React.FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const createSampleData = async (organizationName: string) => {
+    const sampleData = getSampleData()
+    const reportItems = flattenHierarchy(sampleData).map(item => ({
+      category_name: item.category_name,
+      plan_amount: item.plan_amount,
+      fact_amount: item.fact_amount,
+      execution_percent: item.execution_percent,
+      period_type: item.period_type,
+      level: item.level,
+      is_total_row: item.is_total_row,
+      is_expandable: item.is_expandable,
+      parent_category_name: findParentName(sampleData, item.parent_id)
+    }))
+
+    try {
+      const { error } = await supabase
+        .rpc('upsert_plan_fact_report', {
+          p_organization_name: organizationName,
+          p_report_date: reportDate,
+          p_report_items: reportItems
+        })
+
+      if (error) throw error
+      
+      // Reload data to apply filters
+      await loadData()
+    } catch (error) {
+      console.error('Error creating sample data:', error)
+      // If creation fails, just show the sample data
+      loadSampleData()
+    }
+  }
+
+  const findParentName = (items: PlanFactRevenueData[], parentId: string | null): string | null => {
+    if (!parentId) return null
+    let parentName: string | null = null
+    const find = (currentItems: PlanFactRevenueData[]) => {
+      for (const item of currentItems) {
+        if (item.id === parentId) parentName = item.category_name
+        if (!parentName && item.children) find(item.children)
+      }
+    }
+    find(items)
+    return parentName
   }
 
   const loadSampleData = () => {
