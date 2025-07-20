@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../contexts/AuthContext'
 import { Plus, Trash2, Shield, ShieldOff, Building } from 'lucide-react'
+import Modal from '../common/Modal' // Предполагаемый путь к новому компоненту
 
 interface Organization {
   id: string
@@ -270,52 +271,46 @@ const OrganizationManagement: React.FC = () => {
 
       {/* Add Member Modal */}
       {showAddMemberModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="card p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Добавить участника</h3>
-            <form onSubmit={handleAddMember}>
-              <label htmlFor="member-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email нового участника</label>
-              <input
-                id="member-email"
-                type="email"
-                value={newMemberEmail}
-                onChange={(e) => setNewMemberEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="user@example.com"
-                required
-              />
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowAddMemberModal(false)} className="btn-secondary">Отмена</button>
-                <button type="submit" className="btn-primary">Добавить</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Добавить участника" onClose={() => setShowAddMemberModal(false)}>
+          <form onSubmit={handleAddMember}>
+            <label htmlFor="member-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email нового участника</label>
+            <input
+              id="member-email"
+              type="email"
+              value={newMemberEmail}
+              onChange={(e) => setNewMemberEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="user@example.com"
+              required
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowAddMemberModal(false)} className="btn-secondary">Отмена</button>
+              <button type="submit" className="btn-primary">Добавить</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Create Organization Modal */}
       {showCreateOrgModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="card p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Создать новую организацию</h3>
-            <form onSubmit={handleCreateOrganization}>
-              <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название организации</label>
-              <input
-                id="org-name"
-                type="text"
-                value={newOrgName}
-                onChange={(e) => setNewOrgName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Название моей компании"
-                required
-              />
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowCreateOrgModal(false)} className="btn-secondary">Отмена</button>
-                <button type="submit" className="btn-primary">Создать</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Создать новую организацию" onClose={() => setShowCreateOrgModal(false)}>
+          <form onSubmit={handleCreateOrganization}>
+            <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название организации</label>
+            <input
+              id="org-name"
+              type="text"
+              value={newOrgName}
+              onChange={(e) => setNewOrgName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Название моей компании"
+              required
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowCreateOrgModal(false)} className="btn-secondary">Отмена</button>
+              <button type="submit" className="btn-primary">Создать</button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )
