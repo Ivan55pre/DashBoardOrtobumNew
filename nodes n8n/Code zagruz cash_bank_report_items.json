@@ -1,0 +1,63 @@
+// Получаем все элементы, пришедшие от предыдущего узла (HTTP Request)
+const allJsons = items.map(item => item.json);
+const allItems = allJsons.flatMap(obj => obj.body || []);
+
+//const allItems = items.map(item => item.json); // было или когда только массив без обвеса
+
+// Группируем элементы по organization_name
+const groupedItems = allItems.reduce((groups, item) => {
+  const organization = item.organization_name;
+
+  if (!groups[organization]) {
+    groups[organization] = [];
+  }
+  groups[organization].push(item);
+  return groups;
+}, {});
+
+// Формируем выходные данные для каждого уникального отчета
+const output = Object.entries(groupedItems).map(([organization, items]) => {
+  // Берем reportDate из первого элемента группы, если есть, иначе используем текущую дату
+  const reportDate = items[0].reportDate || new Date().toISOString().split('T')[0];
+
+  const reportItems = items.map(item => {
+    let accountType = 'bank';
+    const accountName = (item.account_name || '').toLowerCase();
+
+    if (item.is_total_row) {
+      accountType = 'total';
+    } else if (accountName.includes('касса') || accountName.includes('cash')) {
+      accountType = 'cash';
+    } else if (!accountName) {
+      accountType = 'total';
+    }
+
+    return {
+      account_name: item.account_name,
+      subconto: item.subconto || item.Субконто2 || null,
+      balance_start: parseFloat(item.СуммаНачальныйОстаток) || 0,
+      income_amount: parseFloat(item.СуммаОборотДт) || 0,
+      expense_amount: parseFloat(item.СуммаОборотКт) || 0,
+      balance_current: parseFloat(item.СуммаКонечныйОстаток) || 0,
+      account_type: accountType,
+      level: parseInt(item.level || item.Уровень || 1, 10),
+      currency: item.currency || 'RUB',
+      is_total_row: Boolean(item.is_total_row)
+    };
+  });
+
+  return {
+    json: {
+      query: 'SELECT public.upsert_cash_bank_report($1, $2, $3::jsonb)',
+      params: [
+        organization,
+        reportDate,
+        JSON.stringify(reportItems)
+      ],
+      status: 'ready_for_postgres'
+    }
+  };
+});
+
+return output;
+// return [{ json: { allItems } }];

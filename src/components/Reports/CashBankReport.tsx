@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 interface CashBankReportData {
   id: string
   organization_name: string
+  subconto: string | null
   account_name: string | null
   parent_id: string | null
   balance_start: number
@@ -184,6 +185,7 @@ const CashBankReport: React.FC = () => {
     const sampleData = getSampleData(organizationName)
     const reportItems = flattenHierarchy(sampleData).map(item => ({
       account_name: item.account_name,
+      subconto: item.subconto,
       balance_start: item.balance_start,
       income_amount: item.income_amount,
       expense_amount: item.expense_amount,
@@ -270,6 +272,7 @@ const CashBankReport: React.FC = () => {
       {
         id: uuid1, // Total row
         organization_name: organizationName,
+        subconto: null,
         account_name: 'Итого',
         parent_id: null,
         balance_start: 7413741,
@@ -284,6 +287,7 @@ const CashBankReport: React.FC = () => {
             id: uuid2,
             organization_name: organizationName,
             account_name: organizationName,
+            subconto: null,
             parent_id: uuid1,
             balance_start: 4717137,
             income_amount: 0,
@@ -297,6 +301,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid3,
                 organization_name: organizationName,
                 account_name: 'Альфа-банк',
+                subconto: 'Основной',
                 parent_id: uuid2,
                 balance_start: 63882,
                 income_amount: 0,
@@ -310,6 +315,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid4,
                 organization_name: organizationName,
                 account_name: 'НБД',
+                subconto: 'Зарплатный',
                 parent_id: uuid2,
                 balance_start: 275308,
                 income_amount: 0,
@@ -323,6 +329,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid5,
                 organization_name: organizationName,
                 account_name: 'Сбербанк',
+                subconto: 'Основной',
                 parent_id: uuid2,
                 balance_start: 4248450,
                 income_amount: 0,
@@ -338,6 +345,7 @@ const CashBankReport: React.FC = () => {
             id: uuid6,
             organization_name: 'ООО "ОРТОБУМ"', // This is a different org, for demo purposes
             account_name: 'ООО "ОРТОБУМ"',
+            subconto: null,
             parent_id: uuid1,
             balance_start: 2696604,
             income_amount: 0,
@@ -351,6 +359,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid7,
                 organization_name: 'ООО "ОРТОБУМ"',
                 account_name: 'Альфа-банк',
+                subconto: 'Основной',
                 parent_id: uuid6,
                 balance_start: 1767627,
                 income_amount: 0,
@@ -364,6 +373,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid8,
                 organization_name: 'ООО "ОРТОБУМ"',
                 account_name: 'Сбербанк 8301',
+                subconto: 'Спецсчет',
                 parent_id: uuid6,
                 balance_start: 851443,
                 income_amount: 0,
@@ -377,6 +387,7 @@ const CashBankReport: React.FC = () => {
                 id: uuid9,
                 organization_name: 'ООО "ОРТОБУМ"',
                 account_name: 'ЮникредитБанк',
+                subconto: 'Валютный',
                 parent_id: uuid6,
                 balance_start: 52275,
                 income_amount: 0,
@@ -443,6 +454,7 @@ const CashBankReport: React.FC = () => {
     const headers = [
       'Организация',
       'Банковский счет',
+      'Субконто',
       'Остаток на начало предыдущего рабочего дня',
       'Движение за предыдущий рабочий день Приход',
       'Движение за предыдущий рабочий день Расход',
@@ -454,6 +466,7 @@ const CashBankReport: React.FC = () => {
         result.push([
           item.organization_name,
           item.account_name,
+          item.subconto,
           item.balance_start,
           item.income_amount,
           item.expense_amount,
@@ -513,6 +526,11 @@ const CashBankReport: React.FC = () => {
                   } ${item.account_type === 'organization' ? 'text-blue-700' : ''}`}>
                     {item.account_name || item.organization_name}
                   </h3>
+                  {item.subconto && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {item.subconto}
+                    </p>
+                  )}
                   {item.account_name !== item.organization_name && (
                     <p className="text-xs text-gray-500 mt-1">
                       {item.account_name}
@@ -582,6 +600,9 @@ const CashBankReport: React.FC = () => {
           </td>
           <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
             {item.level > 1 ? item.account_name : ''}
+          </td>
+          <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
+            {item.subconto}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
             {item.balance_start !== 0 ? formatCurrency(item.balance_start) : ''}
@@ -745,6 +766,9 @@ const CashBankReport: React.FC = () => {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Банковский счет
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Субконто
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Остаток на начало предыдущего рабочего дня

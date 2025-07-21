@@ -441,6 +441,7 @@ USING (
 CREATE TABLE cash_bank_report_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     report_id UUID REFERENCES report_metadata(id) ON DELETE CASCADE,
+    subconto TEXT,
     account_name TEXT NOT NULL,
     balance_start DECIMAL(15,2),
     income_amount DECIMAL(15,2),
@@ -595,8 +596,8 @@ BEGIN
     -- Шаг 4: Вставить новые строки отчета из JSON-массива.
     FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
     LOOP
-        INSERT INTO public.cash_bank_report_items (report_id, account_name, balance_start, income_amount, expense_amount, balance_current, account_type, level,currency, is_total_row)
-        VALUES (v_report_id, item->>'account_name', (item->>'balance_start')::DECIMAL, (item->>'income_amount')::DECIMAL, (item->>'expense_amount')::DECIMAL, (item->>'balance_current')::DECIMAL, item->>'account_type', (item->>'level')::INTEGER, item->>'currency', (item->>'is_total_row')::BOOLEAN);
+        INSERT INTO public.cash_bank_report_items (report_id, account_name, subconto, balance_start, income_amount, expense_amount, balance_current, account_type, level,currency, is_total_row)
+        VALUES (v_report_id, item->>'account_name', item->>'subconto', (item->>'balance_start')::DECIMAL, (item->>'income_amount')::DECIMAL, (item->>'expense_amount')::DECIMAL, (item->>'balance_current')::DECIMAL, item->>'account_type', (item->>'level')::INTEGER, item->>'currency', (item->>'is_total_row')::BOOLEAN);
     END LOOP;
 
     -- Возвращаем ID созданного или обновленного отчета для подтверждения.
