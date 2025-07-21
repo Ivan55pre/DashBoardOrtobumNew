@@ -3,6 +3,11 @@ import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 interface InventoryBalanceData {
   id: string
   category_name: string
@@ -15,6 +20,7 @@ interface InventoryBalanceData {
   dynamics_start_year_percent: number
   level: number
   is_total_row: boolean
+  organization_name?: string;
   children?: InventoryBalanceData[]
   expanded?: boolean
 }
@@ -27,9 +33,8 @@ const InventoryBalanceReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  // Filter states
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
   // Helper function to generate UUID v4
   const generateUUID = (): string => {
@@ -55,7 +60,7 @@ const InventoryBalanceReport: React.FC = () => {
     if (user) {
       loadData()
     }
-  }, [user, reportDate, selectedOrganization])
+  }, [user, reportDate, selectedOrgId])
 
   const loadData = async () => {
     setLoading(true)
@@ -77,43 +82,55 @@ const InventoryBalanceReport: React.FC = () => {
       const userOrgs = (orgMembers || [])
         .flatMap(m => m.organizations)
         .filter(Boolean) as { id: string; name: string }[]
-
-      if (userOrgs.length > 0) {
-        setAvailableOrganizations(userOrgs.map(o => o.name))
-      }
+      
+      setOrganizations(userOrgs)
 
       // 2. Determine which organization to show data for
-      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
-      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+      const targetOrgIds = selectedOrgId === ''
+        ? userOrgs.map(o => o.id)
+        : [selectedOrgId]
 
-      if (!targetOrg) {
-        // If no org is selected or found, we might be falling back to sample data
-        throw new Error("No organization selected or user has no organizations.")
+      if (targetOrgIds.length === 0) {
+        setData([])
+        setLoading(false)
+        return
       }
+
+      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
 
       // 3. Get report metadata for the selected organization and date
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
-        .select('id')
-        .eq('organization_id', targetOrg.id)
+        .select('id, organization_id, organizations(name)')
+        .in('organization_id', targetOrgIds)
         .eq('report_type', 'inventory_turnover') // This report uses this type
         .eq('report_date', reportDate)
-        .maybeSingle()
 
       if (metaError) throw metaError
 
-      if (reportMeta?.id) {
+      if (reportMeta && reportMeta.length > 0) {
         // 4. Get report items if metadata exists
+        const reportIds = reportMeta.map(r => r.id)
         const { data: reportItems, error: itemsError } = await supabase
           .from('inventory_turnover_report_items')
           .select('*')
-          .eq('report_id', reportMeta.id)
+          .in('report_id', reportIds)
           .order('level')
           .order('category_name')
 
         if (itemsError) throw itemsError
 
-        const hierarchyData = buildHierarchy(reportItems || [])
+        // Add organization name to each item for consolidated view
+        const itemsWithOrg = (reportItems || []).map(item => {
+          const meta = reportMeta.find(m => m.id === item.report_id)
+          return {
+            ...item,
+            // @ts-ignore
+            organization_name: meta?.organizations?.name || 'Unknown Org'
+          }
+        })
+
+        const hierarchyData = buildHierarchy(itemsWithOrg, isConsolidatedView)
         setData(hierarchyData)
         
         const initialExpanded = new Set<string>()
@@ -124,34 +141,20 @@ const InventoryBalanceReport: React.FC = () => {
         })
         setExpandedRows(initialExpanded)
       } else {
-        // No report for this date/org, create sample data for the selected org
-        await createSampleData(targetOrg.name)
+        // No report for this date/org, show empty or create sample data
+        setData([])
+        // await createSampleData(targetOrg.name) // This logic might need adjustment
       }
     } catch (error) {
       console.error('Error loading data:', error)
       // Показываем демо-данные в случае ошибки
       const sampleData = getSampleData()
-      
+
       // Populate filter options from sample data
       const flatSample = flattenHierarchy(sampleData)
-      const orgsFromSample = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.category_name))]
-      setAvailableOrganizations(orgsFromSample)
 
       // Apply filters to sample data
       let filteredSample = flatSample
-      
-      if (selectedOrganization) {
-        filteredSample = filteredSample.filter(item => 
-          item.category_name === selectedOrganization ||
-          item.is_total_row ||
-          (item.level > 1 && flatSample.some(parent => 
-            parent.id === item.parent_category_id &&
-            parent.category_name === selectedOrganization
-          ))
-        )
-      }
 
       const hierarchyData = buildHierarchy(filteredSample)
       setData(hierarchyData)
@@ -166,58 +169,6 @@ const InventoryBalanceReport: React.FC = () => {
       setExpandedRows(initialExpanded)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const createSampleData = async (organizationName: string) => {
-    const sampleData = getSampleData(organizationName)
-    const reportItems = flattenHierarchy(sampleData).map(item => ({
-      category_name: item.category_name,
-      quantity_pairs: item.quantity_pairs,
-      balance_rub: item.balance_rub,
-      dynamics_start_month_rub: item.dynamics_start_month_rub,
-      dynamics_start_month_percent: item.dynamics_start_month_percent,
-      dynamics_start_year_rub: item.dynamics_start_year_rub,
-      dynamics_start_year_percent: item.dynamics_start_year_percent,
-      turnover_days: 0, // Not relevant for balance report
-      level: item.level,
-      parent_category_name: findParentName(sampleData, item.parent_category_id)
-    }))
-    
-    try {
-      const { error } = await supabase
-        .rpc('upsert_inventory_turnover_report', {
-          p_organization_name: organizationName,
-          p_report_date: reportDate,
-          p_report_items: reportItems
-        })
-
-      if (error) throw error
-      
-      // Reload data to apply filters
-      await loadData()
-    } catch (error) {
-      console.error('Error creating sample data:', error)
-      const sampleData = getSampleData()
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.category_name))]
-      setAvailableOrganizations(organizations)
-
-      setData(sampleData)
-      
-      // Set initial expanded rows even on error
-      const initialExpanded = new Set<string>()
-      const flatSampleData = flattenHierarchy(sampleData)
-      flatSampleData.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
     }
   }
 
@@ -405,27 +356,59 @@ const InventoryBalanceReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: any[]): InventoryBalanceData[] => {
+  const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): InventoryBalanceData[] => {
     const map = new Map()
     const roots: InventoryBalanceData[] = []
 
-    // Создаем карту всех элементов
     flatData.forEach(item => {
       map.set(item.id, { ...item, children: [] })
     })
 
-    // Строим иерархию
-    flatData.forEach(item => {
-      const node = map.get(item.id)
-      if (item.parent_category_id) {
-        const parent = map.get(item.parent_category_id)
-        if (parent) {
-          parent.children.push(node)
-        }
-      } else {
-        roots.push(node)
+    if (isConsolidated) {
+      const consolidatedTotal: InventoryBalanceData = {
+        id: 'consolidated-total',
+        category_name: 'Консолидированный итог',
+        parent_category_id: null,
+        quantity_pairs: 0,
+        balance_rub: 0,
+        dynamics_start_month_rub: 0,
+        dynamics_start_month_percent: 0,
+        dynamics_start_year_rub: 0,
+        dynamics_start_year_percent: 0,
+        level: 0,
+        is_total_row: true,
+        children: []
       }
-    })
+
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) {
+            parent.children.push(node)
+          }
+        } else { // These are the root items for each organization
+          node.category_name = `${item.organization_name} - ${item.category_name}`
+          consolidatedTotal.children?.push(node)
+          consolidatedTotal.balance_rub += item.balance_rub
+          consolidatedTotal.quantity_pairs += item.quantity_pairs
+        }
+      })
+      roots.push(consolidatedTotal)
+    } else {
+      // Original logic for single organization view
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) {
+            parent.children.push(node)
+          }
+        } else {
+          roots.push(node)
+        }
+      })
+    }
 
     return roots
   }
@@ -672,13 +655,13 @@ const InventoryBalanceReport: React.FC = () => {
 
             {/* Mobile Filter */}
             <select
-              value={selectedOrganization}
-              onChange={(e) => setSelectedOrganization(e.target.value)}
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
               className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">Все организации</option>
-              {availableOrganizations.map(org => (
-                <option key={org} value={org}>{org}</option>
+              {organizations.map(org => (
+                <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
           </div>
@@ -719,13 +702,13 @@ const InventoryBalanceReport: React.FC = () => {
           </div>
           
           <select
-            value={selectedOrganization}
-            onChange={(e) => setSelectedOrganization(e.target.value)}
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {availableOrganizations.map(org => (
-              <option key={org} value={org}>{org}</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
           

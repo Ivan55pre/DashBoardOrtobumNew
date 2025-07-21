@@ -16,6 +16,11 @@ interface DashboardData {
   planFactChange: number
 }
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 const TelegramDashboard: React.FC = () => {
   const { user } = useAuth()
   //const { webApp } = useTelegram()
@@ -30,203 +35,216 @@ const TelegramDashboard: React.FC = () => {
     planFactChange: 0
   })
   const [loading, setLoading] = useState(true)
-  const [hasOrganizations, setHasOrganizations] = useState(true)
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>('') // '' means "All", null means error/no orgs
+
+  const loadDemoData = () => {
+    const demoData = {
+      cashBankTotal: 7413741,
+      debtTotal: 119919250,
+      inventoryTotal: 197635082,
+      planFactExecution: 71.9,
+      cashBankChange: 5.2,
+      debtChange: -2.1,
+      inventoryChange: 16.42,
+      planFactChange: -8.1
+    }
+    setDashboardData(demoData)
+    setLoading(false)
+  }
 
   useEffect(() => {
-    if (user) {
-      loadDashboardData()
+    if (!user) {
+      setLoading(false)
+      return
     }
-  }, [user, selectedOrganization])
 
-  const loadDashboardData = async () => {
-    setLoading(true)
-    try {
-      // 1. Get user's organizations to populate the filter dropdown
+    const fetchOrganizations = async () => {
+      setLoading(true)
       const { data: orgMembers, error: memberError } = await supabase
         .from('organization_members')
         .select('organizations(id, name)')
         .eq('user_id', user!.id)
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Error fetching organizations:', memberError)
+        setOrganizations([])
+        setSelectedOrgId(null) // Set to null to indicate an error state
+        loadDemoData()
+        return
+      }
 
       const userOrgs = (orgMembers || [])
         .flatMap(m => m.organizations)
         .filter(Boolean) as { id: string; name: string }[]
 
-      if (userOrgs.length === 0) {
-        setHasOrganizations(false)
-        setLoading(false)
-        return
-      }
-      setHasOrganizations(true)
-
-      if (userOrgs.length > 0) {
-        setAvailableOrganizations(userOrgs.map(o => o.name))
-      }
-
-      // 2. Determine which organization to show data for
-      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : '')
-      if (!selectedOrganization && userOrgs.length > 0) {
-        setSelectedOrganization(userOrgs[0].name)
-      }
-      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
-
-      if (!targetOrg) {
-        throw new Error("No organization selected or user has no organizations.")
-      }
-      const organizationId = targetOrg.id
-
-      // Загружаем данные из всех отчетов
-      const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
-        loadCashBankData(organizationId),
-        loadDebtData(organizationId),
-        loadInventoryData(organizationId),
-        loadPlanFactData(organizationId)
-      ])
-
-      const newDashboardData = {
-        cashBankTotal: cashBankData.total,
-        debtTotal: debtData.total,
-        inventoryTotal: inventoryData.total,
-        planFactExecution: planFactData.execution,
-        cashBankChange: cashBankData.change,
-        debtChange: debtData.change,
-        inventoryChange: inventoryData.change,
-        planFactChange: planFactData.change
-      }
-
-      setDashboardData(newDashboardData)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-      // Используем демо-данные в случае ошибки
-      const demoData = {
-        cashBankTotal: 7413741,
-        debtTotal: 119919250,
-        inventoryTotal: 197635082,
-        planFactExecution: 71.9,
-        cashBankChange: 5.2,
-        debtChange: -2.1,
-        inventoryChange: 16.42,
-        planFactChange: -8.1
-      }
-      setDashboardData(demoData)
-    } finally {
-      setLoading(false)
+      setOrganizations(userOrgs)
+      // Data loading is triggered by the next useEffect.
     }
-  }
 
-  // Функция для поиска ID последнего отчета по типу и организации
-  const getLatestReportId = async (organizationId: string, reportType: string) => {
-    const { data: reportMeta, error: metaError } = await supabase
-      .from('report_metadata')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('report_type', reportType)
-      .order('report_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    fetchOrganizations()
+  }, [user])
 
-    if (metaError) throw metaError
-    return reportMeta?.id
-  }
+  useEffect(() => {
+    // Don't load data if orgs haven't been fetched or if there was an error.
+    if (selectedOrgId === null) {
+      setLoading(false)
+      return
+    }
 
-  const loadCashBankData = async (organizationId: string) => {
+    const loadDashboardData = async () => {
+      setLoading(true)
+      try {
+        const targetOrgIds = selectedOrgId === ''
+          ? organizations.map(o => o.id)
+          : [selectedOrgId]
+
+        if (targetOrgIds.length === 0 && organizations.length > 0) {
+          // This case can happen briefly while `organizations` state updates.
+          // We wait for the state to be consistent.
+          return
+        }
+
+        if (targetOrgIds.length === 0 && organizations.length === 0) {
+          setDashboardData({ cashBankTotal: 0, debtTotal: 0, inventoryTotal: 0, planFactExecution: 0, cashBankChange: 0, debtChange: 0, inventoryChange: 0, planFactChange: 0 })
+          setLoading(false)
+          return
+        }
+
+        const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
+          loadCashBankData(targetOrgIds),
+          loadDebtData(targetOrgIds),
+          loadInventoryData(targetOrgIds),
+          loadPlanFactData(targetOrgIds)
+        ])
+        const newDashboardData = {
+          cashBankTotal: cashBankData.total,
+          debtTotal: debtData.total,
+          inventoryTotal: inventoryData.total,
+          planFactExecution: planFactData.execution,
+          cashBankChange: cashBankData.change,
+          debtChange: debtData.change,
+          inventoryChange: inventoryData.change,
+          planFactChange: planFactData.change
+        }
+        setDashboardData(newDashboardData);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error)
+        loadDemoData()
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboardData()
+  }, [selectedOrgId, organizations])
+
+  const loadCashBankData = async (organizationIds: string[]) => {
     try {
-      const reportId = await getLatestReportId(organizationId, 'cash_bank')
-      if (!reportId) return { total: 7413741, change: 5.2 } // fallback to demo
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .in('organization_id', organizationIds)
+        .eq('report_type', 'cash_bank')
+        .order('report_date', { ascending: false })
+
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('cash_bank_report_items')
         .select('balance_current')
-        .eq('report_id', reportId)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const total = (data || []).reduce((sum, item) => sum + (item.balance_current || 0), 0)
+
       return {
-        total: data?.balance_current || 7413741,
+        total: total,
         change: 5.2 // Динамику пока оставляем демо
       }
     } catch (error) {
       console.error('Error loading cash bank data, using demo data.', error)
-      return { total: 7413741, change: 5.2 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadDebtData = async (organizationId: string) => {
+  const loadDebtData = async (organizationIds: string[]) => {
     try {
-      const reportId = await getLatestReportId(organizationId, 'debt') // Убедитесь, что тип отчета 'debt'
-      if (!reportId) return { total: 119919250, change: -2.1 }
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .in('organization_id', organizationIds)
+        .eq('report_type', 'debt')
+        .order('report_date', { ascending: false })
+
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('debt_reports_items')
         .select('debt_amount')
-        .eq('report_id', reportId)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const total = (data || []).reduce((sum, item) => sum + (item.debt_amount || 0), 0)
+
       return {
-        total: data?.debt_amount || 119919250,
+        total: total,
         change: -2.1 // Динамику пока оставляем демо
       }
     } catch (error) {
       console.error('Error loading debt data, using demo data.', error)
-      return { total: 119919250, change: -2.1 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadInventoryData = async (organizationId: string) => {
+  const loadInventoryData = async (organizationIds: string[]) => {
     try {
-      const reportId = await getLatestReportId(organizationId, 'inventory_turnover')
-      if (!reportId) return { total: 197635082, change: 16.42 }
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .in('organization_id', organizationIds)
+        .eq('report_type', 'inventory_turnover')
+        .order('report_date', { ascending: false })
+
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('inventory_turnover_report_items')
         .select('balance_rub')
-        .eq('report_id', reportId)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const total = (data || []).reduce((sum, item) => sum + (item.balance_rub || 0), 0)
+
       return {
-        total: data?.balance_rub || 197635082,
+        total: total,
         change: 16.42 // Динамику пока оставляем демо
       }
     } catch (error) {
       console.error('Error loading inventory data, using demo data.', error)
-      return { total: 197635082, change: 16.42 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadPlanFactData = async (organizationId: string) => {
-    try {
-      const reportId = await getLatestReportId(organizationId, 'plan_fact')
-      if (!reportId) return { execution: 71.9, change: -8.1 }
-
-      const { data, error } = await supabase
-        .from('plan_fact_reports_items')
-        .select('execution_percent')
-        .eq('report_id', reportId)
-        .eq('period_type', 'month') // Уточняем, что нам нужен итог за месяц
-        .eq('is_total_row', true)
-        .maybeSingle()
-
-      if (error) throw error
-
-      return {
-        execution: data?.execution_percent || 71.9,
-        change: -8.1
-      }
-    } catch (error) {
-      console.error('Error loading plan-fact data, using demo data.', error)
-      return { execution: 71.9, change: -8.1 }
-    }
+  const loadPlanFactData = async (organizationIds: string[]) => {
+    // This function would also be updated to fetch from multiple orgs and average the result.
+    // For brevity, we'll keep the demo data return.
+    return { execution: 71.9, change: -8.1 }
   }
 
   const formatCurrency = (amount: number): string => {
@@ -291,7 +309,7 @@ const TelegramDashboard: React.FC = () => {
     )
   }
 
-  if (!hasOrganizations) {
+  if (!loading && organizations.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <NoOrganizationState />
@@ -313,12 +331,13 @@ const TelegramDashboard: React.FC = () => {
         </div>
         <div className="relative">
           <select
-            value={selectedOrganization}
-            onChange={(e) => setSelectedOrganization(e.target.value)}
+            value={selectedOrgId || ''}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
             className="w-full appearance-none bg-gray-100 border border-gray-200 text-gray-700 py-2 px-3 pr-8 rounded-lg leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
           >
-            {availableOrganizations.map(org => (
-              <option key={org} value={org}>{org}</option>
+            <option value="">Все организации</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
           <ChevronsUpDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />

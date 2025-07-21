@@ -3,9 +3,13 @@ import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 interface InventoryTurnoverData {
   id: string
-  organization_name: string
   category_name: string
   parent_category_id: string | null
   quantity_pairs: number
@@ -17,6 +21,7 @@ interface InventoryTurnoverData {
   turnover_days: number
   level: number
   is_total_row: boolean
+  organization_name?: string;
   children?: InventoryTurnoverData[]
   expanded?: boolean
 }
@@ -29,9 +34,8 @@ const InventoryTurnoverReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  // Filter states
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
   // Helper function to generate UUID v4
   const generateUUID = (): string => {
@@ -57,7 +61,7 @@ const InventoryTurnoverReport: React.FC = () => {
     if (user) {
       loadData()
     }
-  }, [user, reportDate, selectedOrganization])
+  }, [user, reportDate, selectedOrgId])
 
   const loadData = async () => {
     setLoading(true)
@@ -79,42 +83,50 @@ const InventoryTurnoverReport: React.FC = () => {
       const userOrgs = (orgMembers || [])
         .flatMap(m => m.organizations)
         .filter(Boolean) as { id: string; name: string }[]
-
-      if (userOrgs.length > 0) {
-        setAvailableOrganizations(userOrgs.map(o => o.name))
-      }
+      
+      setOrganizations(userOrgs)
 
       // 2. Determine which organization to show data for
-      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
-      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+      const targetOrgIds = selectedOrgId === ''
+        ? userOrgs.map(o => o.id)
+        : [selectedOrgId]
 
-      if (!targetOrg) {
-        throw new Error("No organization selected or user has no organizations.")
+      if (targetOrgIds.length === 0) {
+        setData([])
+        setLoading(false)
+        return
       }
+
+      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
 
       // 3. Get report metadata for the selected organization and date
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
-        .select('id')
-        .eq('organization_id', targetOrg.id)
+        .select('id, organization_id, organizations(name)')
+        .in('organization_id', targetOrgIds)
         .eq('report_type', 'inventory_turnover')
         .eq('report_date', reportDate)
-        .maybeSingle()
 
       if (metaError) throw metaError
 
-      if (reportMeta?.id) {
+      if (reportMeta && reportMeta.length > 0) {
         // 4. Get report items if metadata exists
+        const reportIds = reportMeta.map(r => r.id)
         const { data: reportItems, error: itemsError } = await supabase
           .from('inventory_turnover_report_items')
           .select('*')
-          .eq('report_id', reportMeta.id)
+          .in('report_id', reportIds)
           .order('level')
           .order('category_name')
 
         if (itemsError) throw itemsError
 
-        const hierarchyData = buildHierarchy(reportItems || [])
+        const itemsWithOrg = (reportItems || []).map(item => {
+          const meta = reportMeta.find(m => m.id === item.report_id)
+          return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' }
+        })
+
+        const hierarchyData = buildHierarchy(itemsWithOrg, isConsolidatedView)
         setData(hierarchyData)
         
         const initialExpanded = new Set<string>()
@@ -125,8 +137,8 @@ const InventoryTurnoverReport: React.FC = () => {
         })
         setExpandedRows(initialExpanded)
       } else {
-        // No report for this date/org, create sample data for the selected org
-        await createSampleData(targetOrg.name)
+        // No report for this date/org, show empty
+        setData([])
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -242,8 +254,7 @@ const InventoryTurnoverReport: React.FC = () => {
 
     return [
       {
-        id: uuid1, // Total row
-        organization_name: 'Итого',
+        id: uuid1,
         category_name: 'Итого',
         parent_category_id: null,
         quantity_pairs: 278235531,
@@ -257,8 +268,7 @@ const InventoryTurnoverReport: React.FC = () => {
         is_total_row: true,
         children: [
           {
-            id: uuid2,
-            organization_name: organizationName,
+            id: uuid2,            
             category_name: organizationName,
             parent_category_id: uuid1,
             quantity_pairs: 154455809,
@@ -272,8 +282,7 @@ const InventoryTurnoverReport: React.FC = () => {
             is_total_row: false,
             children: [
               {
-                id: uuid3,
-                organization_name: organizationName,
+                id: uuid3,                
                 category_name: 'Обувь на собственных складах',
                 parent_category_id: uuid2,
                 quantity_pairs: 42645,
@@ -287,8 +296,7 @@ const InventoryTurnoverReport: React.FC = () => {
                 is_total_row: false,
                 children: [
                   {
-                    id: uuid4,
-                    organization_name: organizationName,
+                    id: uuid4,                    
                     category_name: 'Ортопедическая и комфортная обувь, Ортопедическая обувь взрослая',
                     parent_category_id: uuid3,
                     quantity_pairs: 3793,
@@ -302,8 +310,7 @@ const InventoryTurnoverReport: React.FC = () => {
                     is_total_row: false,
                     children: [
                       {
-                        id: uuid5,
-                        organization_name: organizationName,
+                        id: uuid5,                        
                         category_name: 'Ботинки женские',
                         parent_category_id: uuid4,
                         quantity_pairs: 416,
@@ -321,8 +328,7 @@ const InventoryTurnoverReport: React.FC = () => {
                 ]
               },
               {
-                id: uuid12,
-                organization_name: organizationName,
+                id: uuid12,                
                 category_name: 'Обувь на складах комиссионеров',
                 parent_category_id: uuid2,
                 quantity_pairs: 40521,
@@ -336,8 +342,7 @@ const InventoryTurnoverReport: React.FC = () => {
                 is_total_row: false,
                 children: [
                   {
-                    id: uuid13,
-                    organization_name: organizationName,
+                    id: uuid13,                    
                     category_name: 'РВБ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 13159,
@@ -351,8 +356,7 @@ const InventoryTurnoverReport: React.FC = () => {
                     is_total_row: false
                   },
                   {
-                    id: uuid14,
-                    organization_name: organizationName,
+                    id: uuid14,                    
                     category_name: 'ИНТЕРНЕТ РЕШЕНИЯ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 11029,
@@ -366,8 +370,7 @@ const InventoryTurnoverReport: React.FC = () => {
                     is_total_row: false
                   },
                   {
-                    id: uuid15,
-                    organization_name: organizationName,
+                    id: uuid15,                    
                     category_name: 'КУПИШУЗ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 1774,
@@ -389,27 +392,62 @@ const InventoryTurnoverReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: any[]): InventoryTurnoverData[] => {
+  const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): InventoryTurnoverData[] => {
     const map = new Map()
     const roots: InventoryTurnoverData[] = []
 
-    // Создаем карту всех элементов
     flatData.forEach(item => {
       map.set(item.id, { ...item, children: [] })
     })
 
-    // Строим иерархию
-    flatData.forEach(item => {
-      const node = map.get(item.id)
-      if (item.parent_category_id) {
-        const parent = map.get(item.parent_category_id)
-        if (parent) {
-          parent.children.push(node)
-        }
-      } else {
-        roots.push(node)
+    if (isConsolidated) {
+      const consolidatedTotal: InventoryTurnoverData = {
+        id: 'consolidated-total',
+        category_name: 'Консолидированный итог',
+        parent_category_id: null,
+        quantity_pairs: 0,
+        balance_rub: 0,
+        dynamics_start_month_rub: 0,
+        dynamics_start_month_percent: 0,
+        dynamics_start_year_rub: 0,
+        dynamics_start_year_percent: 0,
+        turnover_days: 0,
+        level: 0,
+        is_total_row: true,
+        children: []
       }
-    })
+
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) parent.children.push(node)
+        } else {
+          node.category_name = `${item.organization_name} - ${item.category_name}`
+          consolidatedTotal.children?.push(node)
+          if (item.is_total_row) {
+            consolidatedTotal.balance_rub += item.balance_rub
+            consolidatedTotal.quantity_pairs += item.quantity_pairs
+            consolidatedTotal.dynamics_start_month_rub += item.dynamics_start_month_rub
+            consolidatedTotal.dynamics_start_year_rub += item.dynamics_start_year_rub
+          }
+        }
+      })
+      roots.push(consolidatedTotal)
+    } else {
+      // Original logic for single organization view
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) {
+            parent.children.push(node)
+          }
+        } else {
+          roots.push(node)
+        }
+      })
+    }
 
     return roots
   }
@@ -666,13 +704,13 @@ const InventoryTurnoverReport: React.FC = () => {
 
             {/* Mobile Filter */}
             <select
-              value={selectedOrganization}
-              onChange={(e) => setSelectedOrganization(e.target.value)}
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
               className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">Все организации</option>
-              {availableOrganizations.map(org => (
-                <option key={org} value={org}>{org}</option>
+              {organizations.map(org => (
+                <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
           </div>
@@ -713,13 +751,13 @@ const InventoryTurnoverReport: React.FC = () => {
           </div>
           
           <select
-            value={selectedOrganization}
-            onChange={(e) => setSelectedOrganization(e.target.value)}
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {availableOrganizations.map(org => (
-              <option key={org} value={org}>{org}</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
           

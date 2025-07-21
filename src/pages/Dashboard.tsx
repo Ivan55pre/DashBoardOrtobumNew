@@ -5,6 +5,11 @@ import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { supabase } from '../contexts/AuthContext'
 import { useAuth } from '../contexts/AuthContext'
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 interface DashboardData {
   cashBankTotal: number
   debtTotal: number
@@ -30,9 +35,8 @@ const Dashboard: React.FC = () => {
     planFactChange: 0
   })
   const [loading, setLoading] = useState(true)
-  const [hasOrganizations, setHasOrganizations] = useState(true)
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
   const [widgets, setWidgets] = useState([
     { 
@@ -81,7 +85,7 @@ const Dashboard: React.FC = () => {
     if (user) {
       loadDashboardData()
     }
-  }, [user, selectedOrganization])
+  }, [user, selectedOrgId])
 
   const loadDashboardData = async () => {
     setLoading(true)
@@ -99,34 +103,28 @@ const Dashboard: React.FC = () => {
         .filter(Boolean) as { id: string; name: string }[]
 
       if (userOrgs.length === 0) {
-        setHasOrganizations(false)
+        setOrganizations([])
         setLoading(false)
         return
       }
-      setHasOrganizations(true)
-
-      if (userOrgs.length > 0) {
-        setAvailableOrganizations(userOrgs.map(o => o.name))
-      }
+      setOrganizations(userOrgs)
 
       // 2. Determine which organization to show data for
-      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : '')
-      if (!selectedOrganization && userOrgs.length > 0) {
-        setSelectedOrganization(userOrgs[0].name)
-      }
-      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+      const targetOrgIds = selectedOrgId === ''
+        ? userOrgs.map(o => o.id)
+        : [selectedOrgId]
 
-      if (!targetOrg) {
-        throw new Error("No organization selected or user has no organizations.")
+      if (targetOrgIds.length === 0) {
+        setLoading(false)
+        return
       }
-      const organizationId = targetOrg.id
 
       // Загружаем данные из всех отчетов
       const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
-        loadCashBankData(organizationId),
-        loadDebtData(organizationId),
-        loadInventoryData(organizationId),
-        loadPlanFactData(organizationId)
+        loadCashBankData(targetOrgIds),
+        loadDebtData(targetOrgIds),
+        loadInventoryData(targetOrgIds),
+        loadPlanFactData(targetOrgIds)
       ])
 
       const newDashboardData = {
@@ -162,127 +160,140 @@ const Dashboard: React.FC = () => {
     }
   }
 
-  const loadCashBankData = async (organizationId: string) => {
+  const loadCashBankData = async (organizationIds: string[]) => {
     try {
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
         .select('id')
-        .eq('organization_id', organizationId)
+        .in('organization_id', organizationIds)
         .eq('report_type', 'cash_bank')
         .eq('report_date', reportDate)
-        .maybeSingle()
 
-      if (metaError || !reportMeta?.id) throw metaError || new Error('No cash bank report metadata')
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('cash_bank_report_items')
         .select('balance_current')
-        .eq('report_id', reportMeta.id)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
+      
+      const total = (data || []).reduce((sum, item) => sum + (item.balance_current || 0), 0)
 
       return {
-        total: data?.balance_current || 7413741,
+        total: total,
         change: 5.2
       }
     } catch (error) {
       console.error('Error loading cash bank data, using demo data.', error)
-      return { total: 7413741, change: 5.2 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadDebtData = async (organizationId: string) => {
+  const loadDebtData = async (organizationIds: string[]) => {
     try {
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
         .select('id')
-        .eq('organization_id', organizationId)
+        .in('organization_id', organizationIds)
         .eq('report_type', 'debt') // Assuming 'debt' is the report type
         .eq('report_date', reportDate)
-        .maybeSingle()
 
-      if (metaError || !reportMeta?.id) throw metaError || new Error('No debt report metadata')
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('debt_reports_items')
         .select('debt_amount')
-        .eq('report_id', reportMeta.id)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const total = (data || []).reduce((sum, item) => sum + (item.debt_amount || 0), 0)
+
       return {
-        total: data?.debt_amount || 119919250,
+        total: total,
         change: -2.1
       }
     } catch (error) {
       console.error('Error loading debt data, using demo data.', error)
-      return { total: 119919250, change: -2.1 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadInventoryData = async (organizationId: string) => {
+  const loadInventoryData = async (organizationIds: string[]) => {
     try {
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
         .select('id')
-        .eq('organization_id', organizationId)
+        .in('organization_id', organizationIds)
         .eq('report_type', 'inventory_turnover')
         .eq('report_date', reportDate)
-        .maybeSingle()
 
-      if (metaError || !reportMeta?.id) throw metaError || new Error('No inventory report metadata')
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('inventory_turnover_report_items')
         .select('balance_rub')
-        .eq('report_id', reportMeta.id)
+        .in('report_id', reportIds)
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const total = (data || []).reduce((sum, item) => sum + (item.balance_rub || 0), 0)
+
       return {
-        total: data?.balance_rub || 197635082,
+        total: total,
         change: 16.42
       }
     } catch (error) {
       console.error('Error loading inventory data, using demo data.', error)
-      return { total: 197635082, change: 16.42 }
+      return { total: 0, change: 0 }
     }
   }
 
-  const loadPlanFactData = async (organizationId: string) => {
+  const loadPlanFactData = async (organizationIds: string[]) => {
     try {
       const { data: reportMeta, error: metaError } = await supabase
         .from('report_metadata')
         .select('id')
-        .eq('organization_id', organizationId)
+        .in('organization_id', organizationIds)
         .eq('report_type', 'plan_fact') // Assuming 'plan_fact' is the report type
         .eq('report_date', reportDate)
-        .maybeSingle()
 
-      if (metaError || !reportMeta?.id) throw metaError || new Error('No plan fact report metadata')
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { execution: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
 
       const { data, error } = await supabase
         .from('plan_fact_reports_items')
         .select('execution_percent')
-        .eq('report_id', reportMeta.id)
+        .in('report_id', reportIds)
         .eq('period_type', 'month') // Уточняем, что нам нужен итог за месяц
         .eq('is_total_row', true)
-        .maybeSingle()
 
       if (error) throw error
 
+      const values = (data || []).map(item => item.execution_percent || 0)
+      const execution = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0
+
       return {
-        execution: data?.execution_percent || 71.9,
+        execution: execution,
         change: -8.1
       }
     } catch (error) {
-      return { execution: 71.9, change: -8.1 }
+      return { execution: 0, change: 0 }
     }
   }
 
@@ -417,7 +428,7 @@ const Dashboard: React.FC = () => {
     )
   }
 
-  if (!hasOrganizations) {
+  if (!loading && organizations.length === 0) {
     return <NoOrganizationState />
   }
 
@@ -430,12 +441,13 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="relative">
             <select
-              value={selectedOrganization}
-              onChange={(e) => setSelectedOrganization(e.target.value)}
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
               className="appearance-none btn-secondary text-sm md:text-base pr-8"
             >
-              {availableOrganizations.map(org => (
-                <option key={org} value={org}>{org}</option>
+              <option value="">Все организации</option>
+              {organizations.map(org => (
+                <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
             <ChevronsUpDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />

@@ -3,9 +3,13 @@ import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
 
+interface Organization {
+  id: string;
+  name: string;
+}
+
 interface CashBankReportData {
   id: string
-  organization_name: string
   subconto: string | null
   account_name: string | null
   parent_id: string | null
@@ -16,11 +20,10 @@ interface CashBankReportData {
   account_type: 'bank' | 'cash' | 'total' | 'organization'
   level: number
   is_total_row: boolean
+  organization_name?: string;
   children?: CashBankReportData[]
   expanded?: boolean
 }
-
-const ALL_ORGS_KEY = '' // Используем пустую строку как ключ для "Всех организаций"
 
 const CashBankReport: React.FC = () => {
   const { user } = useAuth()
@@ -31,9 +34,9 @@ const CashBankReport: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false)
   
   // Состояния фильтров
-  const [selectedOrganization, setSelectedOrganization] = useState<string>(ALL_ORGS_KEY)
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
   const [selectedAccount, setSelectedAccount] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
   const [availableAccounts, setAvailableAccounts] = useState<string[]>([])
 
   // Helper function to generate UUID v4
@@ -60,7 +63,7 @@ const CashBankReport: React.FC = () => {
     if (user) {
       loadData()
     }
-  }, [user, reportDate, selectedOrganization, selectedAccount])
+  }, [user, reportDate, selectedOrgId, selectedAccount])
 
   const loadData = async () => {
     setLoading(true)
@@ -80,27 +83,28 @@ const CashBankReport: React.FC = () => {
       const userOrgs = (orgMembers || [])
         .flatMap(m => m.organizations)
         .filter(Boolean) as { id: string; name: string }[]
-
+      
       if (userOrgs.length === 0) {
         setData([])
         setLoading(false)
         return
       }
-      setAvailableOrganizations(userOrgs.map(o => o.name))
+      setOrganizations(userOrgs)
 
       // 2. Определяем, для каких организаций запрашивать данные
-      const targetOrgs = selectedOrganization === ALL_ORGS_KEY
-        ? userOrgs
-        : userOrgs.filter(o => o.name === selectedOrganization)
+      const targetOrgIds = selectedOrgId === ''
+        ? userOrgs.map(o => o.id)
+        : [selectedOrgId]
 
-      if (targetOrgs.length === 0) {
+      if (targetOrgIds.length === 0) {
         setData([])
         setLoading(false)
         return
       }
+      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
 
       // 3. Параллельно запрашиваем метаданные отчетов для всех целевых организаций
-      const reportMetaPromises = targetOrgs.map(org =>
+      const reportMetaPromises = userOrgs.map(org =>
         supabase
           .from('report_metadata')
           .select('id')
@@ -109,7 +113,14 @@ const CashBankReport: React.FC = () => {
           .eq('report_date', reportDate)
           .maybeSingle()
       )
-      const reportMetaResults = await Promise.all(reportMetaPromises)
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id, organization_id, organizations(name)')
+        .in('organization_id', targetOrgIds)
+        .eq('report_type', 'cash_bank')
+        .eq('report_date', reportDate)
+
+      const reportMetaResults = reportMeta || []
       const reportIds = reportMetaResults.map(res => res.data?.id).filter(Boolean) as string[]
 
       let allReportItems: any[] = []
@@ -123,7 +134,12 @@ const CashBankReport: React.FC = () => {
           .order('account_name')
 
         if (itemsError) throw itemsError
-        allReportItems = reportItems || []
+        allReportItems = (reportItems || []).map(item => {
+          const meta = reportMeta.find(m => m.id === item.report_id)
+          return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' }
+        })
+      } else {
+        allReportItems = []
       }
 
       // Если реальных данных нет, используем демонстрационные
@@ -148,7 +164,7 @@ const CashBankReport: React.FC = () => {
       }
       
       // 6. Строим иерархию и обновляем состояние
-      const hierarchyData = buildHierarchy(filteredData)
+      const hierarchyData = buildHierarchy(filteredData, isConsolidatedView)
       setData(hierarchyData)
       
       const initialExpanded = new Set<string>()
@@ -197,8 +213,7 @@ const CashBankReport: React.FC = () => {
 
     return [
       {
-        id: uuid1, // Total row
-        organization_name: organizationName,
+        id: uuid1,
         subconto: null,
         account_name: 'Итого',
         parent_id: null,
@@ -211,8 +226,7 @@ const CashBankReport: React.FC = () => {
         is_total_row: true,
         children: [
           {
-            id: uuid2,
-            organization_name: organizationName,
+            id: uuid2,            
             account_name: organizationName,
             subconto: null,
             parent_id: uuid1,
@@ -225,8 +239,7 @@ const CashBankReport: React.FC = () => {
             is_total_row: false,
             children: [
               {
-                id: uuid3,
-                organization_name: organizationName,
+                id: uuid3,                
                 account_name: 'Альфа-банк',
                 subconto: 'Основной',
                 parent_id: uuid2,
@@ -239,8 +252,7 @@ const CashBankReport: React.FC = () => {
                 is_total_row: false
               },
               {
-                id: uuid4,
-                organization_name: organizationName,
+                id: uuid4,                
                 account_name: 'НБД',
                 subconto: 'Зарплатный',
                 parent_id: uuid2,
@@ -253,8 +265,7 @@ const CashBankReport: React.FC = () => {
                 is_total_row: false
               },
               {
-                id: uuid5,
-                organization_name: organizationName,
+                id: uuid5,                
                 account_name: 'Сбербанк',
                 subconto: 'Основной',
                 parent_id: uuid2,
@@ -269,8 +280,7 @@ const CashBankReport: React.FC = () => {
             ]
           },
           {
-            id: uuid6,
-            organization_name: 'ООО "ОРТОБУМ"', // This is a different org, for demo purposes
+            id: uuid6,            
             account_name: 'ООО "ОРТОБУМ"',
             subconto: null,
             parent_id: uuid1,
@@ -283,8 +293,7 @@ const CashBankReport: React.FC = () => {
             is_total_row: false,
             children: [
               {
-                id: uuid7,
-                organization_name: 'ООО "ОРТОБУМ"',
+                id: uuid7,                
                 account_name: 'Альфа-банк',
                 subconto: 'Основной',
                 parent_id: uuid6,
@@ -297,8 +306,7 @@ const CashBankReport: React.FC = () => {
                 is_total_row: false
               },
               {
-                id: uuid8,
-                organization_name: 'ООО "ОРТОБУМ"',
+                id: uuid8,                
                 account_name: 'Сбербанк 8301',
                 subconto: 'Спецсчет',
                 parent_id: uuid6,
@@ -311,8 +319,7 @@ const CashBankReport: React.FC = () => {
                 is_total_row: false
               },
               {
-                id: uuid9,
-                organization_name: 'ООО "ОРТОБУМ"',
+                id: uuid9,                
                 account_name: 'ЮникредитБанк',
                 subconto: 'Валютный',
                 parent_id: uuid6,
@@ -333,31 +340,59 @@ const CashBankReport: React.FC = () => {
 
   // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
   // Этот метод надежнее, чем построение на основе уровней (level).
-  const buildHierarchy = (flatData: any[]): CashBankReportData[] => {
+  const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): CashBankReportData[] => {
     const map = new Map<string, any>()
     const roots: CashBankReportData[] = []
 
-    if (!flatData || flatData.length === 0) {
-      return roots
-    }
-
-    // 1. Создаем карту, где ключ - это ID элемента, а значение - сам элемент с пустым массивом children.
     flatData.forEach(item => {
       map.set(item.id, { ...item, children: [] })
     })
 
-    // 2. Проходим по списку еще раз, чтобы разместить каждый узел в children его родителя.
-    flatData.forEach(item => {
-      const node = map.get(item.id)
-      if (item.parent_id && map.has(item.parent_id)) {
-        // Если у элемента есть родитель, добавляем его в массив children родителя.
-        const parent = map.get(item.parent_id)
-        parent.children.push(node)
-      } else {
-        // Если родителя нет, это корневой элемент.
-        roots.push(node)
+    if (isConsolidated) {
+      const consolidatedTotal: CashBankReportData = {
+        id: 'consolidated-total',
+        account_name: 'Консолидированный итог',
+        parent_id: null,
+        subconto: null,
+        balance_start: 0,
+        income_amount: 0,
+        expense_amount: 0,
+        balance_current: 0,
+        account_type: 'total',
+        level: 0,
+        is_total_row: true,
+        children: []
       }
-    })
+
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_id) {
+          const parent = map.get(item.parent_id)
+          if (parent) parent.children.push(node)
+        } else {
+          node.account_name = `${item.organization_name} - ${item.account_name}`
+          consolidatedTotal.children?.push(node)
+          if (item.is_total_row) {
+            consolidatedTotal.balance_start += item.balance_start
+            consolidatedTotal.income_amount += item.income_amount
+            consolidatedTotal.expense_amount += item.expense_amount
+            consolidatedTotal.balance_current += item.balance_current
+          }
+        }
+      })
+      roots.push(consolidatedTotal)
+    } else {
+      // Original logic for single organization view
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_id && map.has(item.parent_id)) {
+          const parent = map.get(item.parent_id)
+          parent.children.push(node)
+        } else {
+          roots.push(node)
+        }
+      })
+    }
 
     return roots
   }
@@ -596,13 +631,13 @@ const CashBankReport: React.FC = () => {
             {/* Mobile Filters */}
             <div className="space-y-2">
               <select
-                value={selectedOrganization}
-                onChange={(e) => setSelectedOrganization(e.target.value)}
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
-                <option value={ALL_ORGS_KEY}>Все организации</option>
-                {availableOrganizations.map(org => (
-                  <option key={org} value={org}>{org}</option>
+                <option value="">Все организации</option>
+                {organizations.map(org => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
               </select>
 
@@ -655,13 +690,13 @@ const CashBankReport: React.FC = () => {
           </div>
           
           <select
-            value={selectedOrganization}
-            onChange={(e) => setSelectedOrganization(e.target.value)}
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
-            <option value={ALL_ORGS_KEY}>Все организации</option>
-            {availableOrganizations.map(org => (
-              <option key={org} value={org}>{org}</option>
+            <option value="">Все организации</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
 
