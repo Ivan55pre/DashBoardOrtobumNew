@@ -11,7 +11,7 @@ export interface Organization {
 }
 
 interface Member {
-  member_id: string
+  member_id: number
   user_id: string
   role: 'admin' | 'member'
   email: string

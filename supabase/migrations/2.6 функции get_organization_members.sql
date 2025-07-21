@@ -1,11 +1,10 @@
--- Функция для получения списка членов организации вместе с их email.
--- Необходима, так как клиентское приложение не может напрямую соединять
--- таблицу `organization_members` с `auth.users` из-за RLS.
+-- Удаляем старую версию функции, если она существует, чтобы избежать конфликтов.
 DROP FUNCTION IF EXISTS public.get_organization_members(UUID);
 
+-- Создаем новую, исправленную версию функции.
 CREATE OR REPLACE FUNCTION public.get_organization_members(p_organization_id UUID)
 RETURNS TABLE (
-    member_id BIGINT, -- Исправлено: тип BIGINT, удален дубликат
+    member_id BIGINT,
     user_id UUID,
     organization_id UUID,
     role TEXT,
@@ -34,10 +33,10 @@ BEGIN
     END IF;
 
     -- Если проверка пройдена, возвращаем список участников с их email.
-    -- Количество и типы столбцов теперь соответствуют объявлению RETURNS TABLE.
+    -- Явный псевдоним "AS member_id" обеспечивает соответствие с RETURNS TABLE.
     RETURN QUERY
     SELECT
-        om.id,
+        om.id AS member_id,
         om.user_id,
         om.organization_id,
         om.role,

@@ -3,7 +3,7 @@ import { Plus, Trash2, Shield, ShieldOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface Member {
-  member_id: string
+  member_id: number
   user_id: string
   role: 'admin' | 'member'
   email: string
