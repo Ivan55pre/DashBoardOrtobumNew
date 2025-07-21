@@ -1,7 +1,2 @@
 node_modules
 .env
-src/components/Reports/CashBankReport.tsx
-src/components/Reports/CashBankReport.tsx
-src/pages/Dashboard.tsx
-src/pages/Reports.tsx
-src/pages/TelegramDashboard.tsx
