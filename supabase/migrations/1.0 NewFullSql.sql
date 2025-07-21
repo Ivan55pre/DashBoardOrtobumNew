@@ -681,7 +681,7 @@ USING (
     SELECT 1
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
-    WHERE rm.id = inventory_turnover_report_items.report_id
+    WHERE rm.id = inventory_turnover_report_items.report_id AND om.user_id = auth.uid()
   )
 );
 
@@ -694,6 +694,7 @@ WITH CHECK (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
+      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
@@ -707,6 +708,7 @@ USING (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
+      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
@@ -720,6 +722,7 @@ USING (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
+      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
@@ -1120,9 +1123,10 @@ $$ LANGUAGE plpgsql;
 -- Функция для получения списка членов организации вместе с их email.
 -- Необходима, так как клиентское приложение не может напрямую соединять
 -- таблицу `organization_members` с `auth.users` из-за RLS.
-CREATE OR REPLACE FUNCTION public.get_organization_members(p_organization_id UUID)
+DROP FUNCTION IF EXISTS public.get_organization_members(UUID);
+CREATE FUNCTION public.get_organization_members(p_organization_id UUID)
 RETURNS TABLE (
-    member_id UUID,
+    member_id BIGINT,
     user_id UUID,
     organization_id UUID,
     role TEXT,
