@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useUserOrganizations } from '../hooks/useUserOrganizations'
+import { useUserOrganizations, Organization } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
 //import { useTelegram } from '../contexts/TelegramContext'
 
@@ -18,6 +18,7 @@ interface InventoryTurnoverData {
   turnover_days: number
   level: number
   is_total_row: boolean
+  organization_name?: string;
   children?: InventoryTurnoverData[]
   expanded?: boolean
 }
@@ -39,21 +40,23 @@ const TelegramTurnoverReport: React.FC = () => {
     })
   }
 
-  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+  const { organizations, isLoading: isLoadingOrgs, error: orgsError } = useUserOrganizations()
 
-  const targetOrg = useMemo(() => organizations?.[0] ?? null, [organizations])
+  const targetOrgIds = useMemo(() => {
+    if (isLoadingOrgs || !organizations) return null
+    // For Telegram view, always show all organizations consolidated
+    return organizations.map(o => o.id)
+  }, [organizations, isLoadingOrgs])
 
   const loadSampleData = useCallback(() => {
     setLoading(true)
     const sample = getSampleData()
-    const hierarchyData = buildHierarchy(flattenHierarchy(sample))
+    const hierarchyData = buildHierarchy(flattenHierarchy(sample), false)
     setData(hierarchyData)
     
     const initialExpanded = new Set<string>()
     flattenHierarchy(sample).forEach(item => {
-      if (item.level <= 2) {
-        initialExpanded.add(item.id)
-      }
+      if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
     setActiveOrganizationName('Демо-данные')
@@ -61,54 +64,56 @@ const TelegramTurnoverReport: React.FC = () => {
   }, [])
 
   const handleReportNotFound = useCallback(() => {
-    if (targetOrg) {
-      console.warn(`No turnover report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
-      loadSampleData()
-    } else if (!isLoadingOrgs) {
-      // No orgs and not loading them, show sample data or an empty state
-      loadSampleData()
-    }
-  }, [targetOrg, reportDate, loadSampleData, isLoadingOrgs])
+    console.warn(`No turnover report found for selected orgs on ${reportDate}.`)
+    setData([])
+  }, [reportDate]);
 
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<InventoryTurnoverData>({
-    organizationId: targetOrg?.id ?? null,
+    organizationIds: targetOrgIds,
     reportType: 'inventory_turnover',
     reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'category_name' }],
     onNotFound: handleReportNotFound,
   })
 
-  useEffect(() => {
-    // Combined loading state: true if we are fetching orgs or the report itself
-    const stillWaiting = isLoadingOrgs || (targetOrg ? isLoadingReport : false)
-    setLoading(stillWaiting)
-  }, [isLoadingOrgs, isLoadingReport, targetOrg])
+  useEffect(() => {    
+    setLoading(isLoadingOrgs || isLoadingReport)
+  }, [isLoadingOrgs, isLoadingReport])
 
   useEffect(() => {
-    if (reportError) {
-      console.error('Error loading report data:', reportError)
+    if (reportError || orgsError) {
+      console.error('Error loading report data:', reportError || orgsError)
       loadSampleData()
     }
-  }, [reportError, loadSampleData])
+  }, [reportError, orgsError, loadSampleData])
 
   useEffect(() => {
     if (isLoadingReport || !reportItems) {
-      if (!isLoadingReport && !targetOrg && !isLoadingOrgs && !reportError) {
+      if (!isLoadingReport && !targetOrgIds && !isLoadingOrgs && !reportError) {
         // Finished loading everything, no orgs, no items, no error.
         setData([])
         setActiveOrganizationName(null)
       }
       return
     }
-    const hierarchyData = buildHierarchy(reportItems)
+    const isConsolidatedView = (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(reportItems, isConsolidatedView)
     setData(hierarchyData)
-    setActiveOrganizationName(targetOrg?.name ?? null)
+
+    if (isConsolidatedView) {
+      setActiveOrganizationName('Все организации')
+    } else if (organizations?.length === 1) {
+      setActiveOrganizationName(organizations[0].name)
+    } else {
+      setActiveOrganizationName(null)
+    }
+
     const initialExpanded = new Set<string>()
     reportItems.forEach(item => {
       if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
-  }, [reportItems, isLoadingReport, targetOrg, isLoadingOrgs, reportError])
+  }, [reportItems, isLoadingReport, organizations, targetOrgIds, isLoadingOrgs, reportError])
 
   const flattenHierarchy = (items: InventoryTurnoverData[]): InventoryTurnoverData[] => {
     const result: InventoryTurnoverData[] = []
@@ -284,27 +289,59 @@ const TelegramTurnoverReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: any[]): InventoryTurnoverData[] => {
+  const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): InventoryTurnoverData[] => {
     const map = new Map()
     const roots: InventoryTurnoverData[] = []
 
-    // Создаем карту всех элементов
     flatData.forEach(item => {
       map.set(item.id, { ...item, children: [] })
     })
 
-    // Строим иерархию
-    flatData.forEach(item => {
-      const node = map.get(item.id)
-      if (item.parent_category_id) {
-        const parent = map.get(item.parent_category_id)
-        if (parent) {
-          parent.children.push(node)
-        }
-      } else {
-        roots.push(node)
+    if (isConsolidated) {
+      const consolidatedTotal: InventoryTurnoverData = {
+        id: 'consolidated-total',
+        category_name: 'Консолидированный итог',
+        parent_category_id: null,
+        quantity_pairs: 0,
+        balance_rub: 0,
+        dynamics_start_month_rub: 0,
+        dynamics_start_month_percent: 0,
+        dynamics_start_year_rub: 0,
+        dynamics_start_year_percent: 0,
+        turnover_days: 0,
+        level: 0,
+        is_total_row: true,
+        children: []
       }
-    })
+
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) parent.children.push(node)
+        } else {
+          node.category_name = `${item.organization_name} - ${item.category_name}`
+          consolidatedTotal.children?.push(node)
+          if (item.is_total_row) {
+            consolidatedTotal.balance_rub += item.balance_rub
+            consolidatedTotal.quantity_pairs += item.quantity_pairs
+            consolidatedTotal.dynamics_start_month_rub += item.dynamics_start_month_rub
+            consolidatedTotal.dynamics_start_year_rub += item.dynamics_start_year_rub
+          }
+        }
+      })
+      roots.push(consolidatedTotal)
+    } else {
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_category_id) {
+          const parent = map.get(item.parent_category_id)
+          if (parent) parent.children.push(node)
+        } else {
+          roots.push(node)
+        }
+      })
+    }
 
     return roots
   }

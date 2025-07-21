@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserOrganizations } from '../../hooks/useUserOrganizations'
+import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 
 interface DebtReportData {
@@ -15,6 +15,7 @@ interface DebtReportData {
   level: number
   is_total_row: boolean
   is_group_row: boolean
+  organization_name?: string;
   children?: DebtReportData[]
   expanded?: boolean
 }
@@ -27,7 +28,7 @@ const DebtReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
   const [selectedCustomer, setSelectedCustomer] = useState<string>('')
 
   // Helper function to generate UUID v4
@@ -39,7 +40,7 @@ const DebtReport: React.FC = () => {
     })
   }
 
-  const { organizations: availableOrganizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
 
   useEffect(() => {
     const checkMobile = () => {
@@ -52,95 +53,35 @@ const DebtReport: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const loadSampleData = () => {
-    setLoading(true)
-    const sampleData = getSampleData()
-    const flatSample = flattenHierarchy(sampleData)
-
-    // Populate filter options from sample data
-    const organizations = [...new Set(flatSample
-      .filter(item => item.organization_type === 'buyer' && item.level >= 3)
-      .map(item => item.client_name))]
-
-    // Apply filters to sample data
-    let filteredSample = flatSample
-    
-    if (selectedOrganization) {
-      // This is a simplified filter logic for sample data
-      const orgRoot = sampleData.find(org => org.client_name === selectedOrganization);
-      if (orgRoot) {
-        const orgAndChildrenIds = new Set<string>();
-        const collectIds = (item: DebtReportData) => {
-            orgAndChildrenIds.add(item.id);
-            if (item.children) {
-                item.children.forEach(collectIds);
-            }
-        };
-        collectIds(orgRoot);
-        
-        filteredSample = flatSample.filter(item => 
-            item.is_total_row || orgAndChildrenIds.has(item.id)
-        );
-      }
-    }
-
-    if (selectedCustomer) {
-      filteredSample = filteredSample.filter(item => 
-        item.client_name === selectedCustomer || 
-        item.is_total_row ||
-        item.level <= 2 ||
-        item.organization_type !== 'buyer'
-      )
-    }
-
-    const hierarchyData = buildHierarchy(filteredSample)
-    setData(hierarchyData)
-    
-    // Set initial expanded rows for sample data
-    const initialExpanded = new Set<string>()
-    filteredSample.forEach(item => {
-      if (item.level <= 2) {
-        initialExpanded.add(item.id)
-      }
-    })
-    setExpandedRows(initialExpanded)
-    setLoading(false)
-  }
-
-  const targetOrg = useMemo(() => {
-    const targetOrgName = selectedOrganization || (availableOrganizations.length > 0 ? availableOrganizations[0].name : null)
-    return availableOrganizations.find(o => o.name === targetOrgName)
-  }, [selectedOrganization, availableOrganizations])
+  const targetOrgIds = useMemo(() => {
+    if (isLoadingOrgs || !organizations) return null
+    return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
+  }, [selectedOrgId, organizations, isLoadingOrgs])
 
   const handleReportNotFound = useCallback(() => {
-    if (targetOrg) {
-      console.warn(`No debt report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
-      loadSampleData()
-    }
-  }, [targetOrg, reportDate]);
+    console.warn(`No debt report found for selected orgs on ${reportDate}.`)
+    setData([])
+  }, [reportDate]);
 
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<DebtReportData>({
-    organizationId: targetOrg?.id ?? null,
+    organizationIds: targetOrgIds,
     reportType: 'debt',
     reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'client_name' }],
     onNotFound: handleReportNotFound
   })
 
-  // Set loading state based on all loading sources
   useEffect(() => {
     setLoading(isLoadingOrgs || isLoadingReport)
   }, [isLoadingOrgs, isLoadingReport])
 
-  // Handle report error
   useEffect(() => {
     if (reportError) {
       console.error('Error loading report data:', reportError)
-      loadSampleData()
+      setData([])
     }
   }, [reportError])
 
-  // Process data from hook into hierarchical view
   useEffect(() => {
     if (isLoadingReport || !reportItems) {
       if (!isLoadingReport) setData([]); // Clear data if loading finished and no items
@@ -156,7 +97,8 @@ const DebtReport: React.FC = () => {
       )
     }
 
-    const hierarchyData = buildHierarchy(filteredData)
+    const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(filteredData, isConsolidatedView)
     setData(hierarchyData)
 
     const initialExpanded = new Set<string>()
@@ -164,7 +106,7 @@ const DebtReport: React.FC = () => {
       if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
-  }, [reportItems, isLoadingReport, selectedCustomer])
+  }, [reportItems, isLoadingReport, selectedCustomer, selectedOrgId, organizations])
 
   const flattenHierarchy = (items: DebtReportData[]): DebtReportData[] => {
     const result: DebtReportData[] = []
@@ -329,27 +271,59 @@ const DebtReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: any[]): DebtReportData[] => {
+  const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): DebtReportData[] => {
     const map = new Map()
     const roots: DebtReportData[] = []
 
-    // Создаем карту всех элементов
     flatData.forEach(item => {
       map.set(item.id, { ...item, children: [] })
     })
 
-    // Строим иерархию
-    flatData.forEach(item => {
-      const node = map.get(item.id)
-      if (item.parent_client_id) {
-        const parent = map.get(item.parent_client_id)
-        if (parent) {
-          parent.children.push(node)
-        }
-      } else {
-        roots.push(node)
+    if (isConsolidated) {
+      const consolidatedTotal: DebtReportData = {
+        id: 'consolidated-total',
+        client_name: 'Консолидированный итог',
+        parent_client_id: null,
+        debt_amount: 0,
+        overdue_amount: 0,
+        credit_amount: 0,
+        organization_type: 'total',
+        level: 0,
+        is_total_row: true,
+        is_group_row: false,
+        children: []
       }
-    })
+
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_client_id) {
+          const parent = map.get(item.parent_client_id)
+          if (parent) parent.children.push(node)
+        } else {
+          node.client_name = `${item.organization_name} - ${item.client_name}`
+          consolidatedTotal.children?.push(node)
+          if (item.is_total_row) {
+            consolidatedTotal.debt_amount += item.debt_amount
+            consolidatedTotal.overdue_amount += item.overdue_amount
+            consolidatedTotal.credit_amount += item.credit_amount
+          }
+        }
+      })
+      roots.push(consolidatedTotal)
+    } else {
+      // Original logic for single organization view
+      flatData.forEach(item => {
+        const node = map.get(item.id)
+        if (item.parent_client_id) {
+          const parent = map.get(item.parent_client_id)
+          if (parent) {
+            parent.children.push(node)
+          }
+        } else {
+          roots.push(node)
+        }
+      })
+    }
 
     return roots
   }
@@ -519,14 +493,6 @@ const DebtReport: React.FC = () => {
     )
   }
 
-  // Derived state for customer dropdown
-  const availableCustomers = useMemo(() => {
-    if (!reportItems) return []
-    return [...new Set((reportItems)
-      .filter(item => item.level >= 3)
-      .map(item => item.client_name))]
-  }, [reportItems])
-
   if (loading) {
     return (
       <div className="card p-6">
@@ -541,6 +507,13 @@ const DebtReport: React.FC = () => {
       </div>
     )
   }
+
+  const availableCustomers = useMemo(() => {
+    if (!reportItems) return []
+    return [...new Set((reportItems)
+      .filter(item => item.level >= 3)
+      .map(item => item.client_name))]
+  }, [reportItems])
 
   if (isMobile) {
     return (
@@ -572,13 +545,13 @@ const DebtReport: React.FC = () => {
             {/* Mobile Filters */}
             <div className="space-y-2">
               <select
-                value={selectedOrganization}
-                onChange={(e) => setSelectedOrganization(e.target.value)}
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">Все организации</option>
-                {availableOrganizations.map(org => (
-                  <option key={org} value={org}>{org}</option>
+                {organizations.map(org => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
               </select>
 
@@ -632,13 +605,13 @@ const DebtReport: React.FC = () => {
           </div>
           
           <select
-            value={selectedOrganization}
-            onChange={(e) => setSelectedOrganization(e.target.value)}
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {availableOrganizations.map(org => (
-              <option key={org.name} value={org.name}>{org.name}</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
 

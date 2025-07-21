@@ -1,12 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
-
-interface Organization {
-  id: string;
-  name: string;
-}
+import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
+import { useReportItems } from '../../hooks/useReportItems'
 
 interface PlanFactRevenueData {
   id: string
@@ -32,7 +28,6 @@ const PlanFactRevenueReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
   // Helper function to generate UUID v4
@@ -55,96 +50,53 @@ const PlanFactRevenueReport: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+
+  const targetOrgIds = useMemo(() => {
+    if (isLoadingOrgs || !organizations) return null
+    return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
+  }, [selectedOrgId, organizations, isLoadingOrgs])
+
+  const handleReportNotFound = useCallback(() => {
+    console.warn(`No plan-fact report found for selected orgs on ${reportDate}.`)
+    setData([])
+  }, [reportDate]);
+
+  const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<PlanFactRevenueData>({
+    organizationIds: targetOrgIds,
+    reportType: 'plan_fact',
+    reportDate: reportDate,
+    orderColumns: [{ column: 'level' }, { column: 'category_name' }],
+    onNotFound: handleReportNotFound
+  })
+
   useEffect(() => {
-    if (user) {
-      loadData()
+    setLoading(isLoadingOrgs || isLoadingReport)
+  }, [isLoadingOrgs, isLoadingReport])
+
+  useEffect(() => {
+    if (reportError) {
+      console.error('Error loading report data:', reportError)
+      setData([])
     }
-  }, [user, reportDate, selectedOrgId])
+  }, [reportError])
 
-  const loadData = async () => {
-    setLoading(true)
-    
-    if (!user) {
-      setLoading(false)
-      return
+  useEffect(() => {
+    if (isLoadingReport || !reportItems) {
+      if (!isLoadingReport) setData([]);
+      return;
     }
 
-    try {
-      // 1. Get user's organizations to populate the filter dropdown
-      const { data: orgMembers, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organizations(id, name)')
-        .eq('user_id', user.id)
+    const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(reportItems, isConsolidatedView)
+    setData(hierarchyData)
 
-      if (memberError) throw memberError;
-
-      const userOrgs = (orgMembers || [])
-        .flatMap(m => m.organizations)
-        .filter(Boolean) as { id: string; name: string }[]
-      
-      setOrganizations(userOrgs)
-
-      // 2. Determine which organization to show data for
-      const targetOrgIds = selectedOrgId === ''
-        ? userOrgs.map(o => o.id)
-        : [selectedOrgId]
-
-      if (targetOrgIds.length === 0) {
-        setData([])
-        setLoading(false)
-        return
-      }
-
-      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
-
-      // 3. Get report metadata for the selected organization and date
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id, organization_id, organizations(name)')
-        .in('organization_id', targetOrgIds)
-        .eq('report_type', 'plan_fact') // Report type for plan-fact
-        .eq('report_date', reportDate)
-
-      if (metaError) throw metaError
-
-      if (reportMeta && reportMeta.length > 0) {
-        // 4. Get report items if metadata exists
-        const reportIds = reportMeta.map(r => r.id)
-        const { data: reportItems, error: itemsError } = await supabase
-          .from('plan_fact_reports_items')
-          .select('*')
-          .in('report_id', reportIds)
-          .order('level')
-          .order('category_name')
-
-        if (itemsError) throw itemsError
-
-        const itemsWithOrg = (reportItems || []).map(item => {
-          const meta = reportMeta.find(m => m.id === item.report_id)
-          return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' }
-        })
-
-        const hierarchyData = buildHierarchy(itemsWithOrg, isConsolidatedView)
-        setData(hierarchyData)
-        
-        const initialExpanded = new Set<string>()
-        ;(reportItems || []).forEach(item => {
-          if (item.level <= 2) {
-            initialExpanded.add(item.id)
-          }
-        })
-        setExpandedRows(initialExpanded)
-      } else {
-        setData([])
-        // console.warn(`No plan-fact report found for selected orgs on ${reportDate}. Creating and loading sample data.`)
-        // await createSampleData(targetOrg.name)
-      }
-    } catch (error) {
-      console.error('Error loading data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    const initialExpanded = new Set<string>()
+    reportItems.forEach(item => {
+      if (item.level <= 2) initialExpanded.add(item.id)
+    })
+    setExpandedRows(initialExpanded)
+  }, [reportItems, isLoadingReport, selectedOrgId, organizations])
 
   const createSampleData = async (organizationName: string) => {
     const sampleData = getSampleData()
