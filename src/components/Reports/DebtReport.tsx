@@ -30,6 +30,7 @@ const DebtReport: React.FC = () => {
   
   const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
   const [selectedCustomer, setSelectedCustomer] = useState<string>('')
+  const [availableCustomers, setAvailableCustomers] = useState<string[]>([])
 
   // Helper function to generate UUID v4
   const generateUUID = (): string => {
@@ -58,17 +59,11 @@ const DebtReport: React.FC = () => {
     return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
   }, [selectedOrgId, organizations, isLoadingOrgs])
 
-  const handleReportNotFound = useCallback(() => {
-    console.warn(`No debt report found for selected orgs on ${reportDate}.`)
-    setData([])
-  }, [reportDate]);
-
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<DebtReportData>({
     organizationIds: targetOrgIds,
     reportType: 'debt',
     reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'client_name' }],
-    onNotFound: handleReportNotFound
   })
 
   useEffect(() => {
@@ -76,21 +71,28 @@ const DebtReport: React.FC = () => {
   }, [isLoadingOrgs, isLoadingReport])
 
   useEffect(() => {
-    if (reportError) {
-      console.error('Error loading report data:', reportError)
-      setData([])
-    }
-  }, [reportError])
+    if (loading) return
 
-  useEffect(() => {
-    if (isLoadingReport || !reportItems) {
-      if (!isLoadingReport) setData([]); // Clear data if loading finished and no items
-      return;
+    const hasRealData = reportItems && reportItems.length > 0 && !reportError
+    let itemsToProcess: DebtReportData[]
+
+    if (hasRealData) {
+      itemsToProcess = reportItems
+    } else {
+      if (reportError) console.error('Error loading report data:', reportError)
+      console.warn(`No debt reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+      itemsToProcess = flattenHierarchy(getSampleData())
     }
 
-    let filteredData = reportItems
+    const customers = [...new Set(itemsToProcess
+      .filter(item => item.level >= 3 && item.client_name)
+      .map(item => item.client_name as string)
+    )]
+    setAvailableCustomers(customers)
+
+    let filteredData = itemsToProcess
     if (selectedCustomer) {
-      filteredData = filteredData.filter(item =>
+      filteredData = itemsToProcess.filter(item =>
         item.client_name === selectedCustomer ||
         item.is_total_row ||
         item.level <= 2
@@ -106,7 +108,7 @@ const DebtReport: React.FC = () => {
       if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
-  }, [reportItems, isLoadingReport, selectedCustomer, selectedOrgId, organizations])
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedCustomer, reportDate])
 
   const flattenHierarchy = (items: DebtReportData[]): DebtReportData[] => {
     const result: DebtReportData[] = []
@@ -508,13 +510,6 @@ const DebtReport: React.FC = () => {
     )
   }
 
-  const availableCustomers = useMemo(() => {
-    if (!reportItems) return []
-    return [...new Set((reportItems)
-      .filter(item => item.level >= 3)
-      .map(item => item.client_name))]
-  }, [reportItems])
-
   if (isMobile) {
     return (
       <div className="card p-0 overflow-hidden">
@@ -550,7 +545,7 @@ const DebtReport: React.FC = () => {
                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">Все организации</option>
-                {organizations.map(org => (
+                {(organizations || []).map(org => (
                   <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
               </select>
@@ -610,7 +605,7 @@ const DebtReport: React.FC = () => {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {organizations.map(org => (
+            {(organizations || []).map(org => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>

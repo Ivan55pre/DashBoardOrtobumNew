@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
 import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 
@@ -21,7 +20,6 @@ interface PlanFactRevenueData {
 }
 
 const PlanFactRevenueReport: React.FC = () => {
-  const { user } = useAuth()
   const [data, setData] = useState<PlanFactRevenueData[]>([])
   const [loading, setLoading] = useState(true)
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
@@ -57,17 +55,11 @@ const PlanFactRevenueReport: React.FC = () => {
     return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
   }, [selectedOrgId, organizations, isLoadingOrgs])
 
-  const handleReportNotFound = useCallback(() => {
-    console.warn(`No plan-fact report found for selected orgs on ${reportDate}.`)
-    setData([])
-  }, [reportDate]);
-
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<PlanFactRevenueData>({
     organizationIds: targetOrgIds,
     reportType: 'plan_fact',
     reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'category_name' }],
-    onNotFound: handleReportNotFound
   })
 
   useEffect(() => {
@@ -75,74 +67,31 @@ const PlanFactRevenueReport: React.FC = () => {
   }, [isLoadingOrgs, isLoadingReport])
 
   useEffect(() => {
-    if (reportError) {
-      console.error('Error loading report data:', reportError)
-      setData([])
-    }
-  }, [reportError])
+    if (loading) return
 
-  useEffect(() => {
-    if (isLoadingReport || !reportItems) {
-      if (!isLoadingReport) setData([]);
-      return;
+    const hasRealData = reportItems && reportItems.length > 0 && !reportError
+    let itemsToProcess: PlanFactRevenueData[]
+
+    if (hasRealData) {
+      itemsToProcess = reportItems
+    } else {
+      if (reportError) console.error('Error loading report data:', reportError)
+      console.warn(`No plan-fact reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+      itemsToProcess = flattenHierarchy(getSampleData())
     }
 
     const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
-    const hierarchyData = buildHierarchy(reportItems, isConsolidatedView)
+    const hierarchyData = buildHierarchy(itemsToProcess, isConsolidatedView)
     setData(hierarchyData)
 
     const initialExpanded = new Set<string>()
-    reportItems.forEach(item => {
-      if (item.level <= 2) initialExpanded.add(item.id)
+    itemsToProcess.forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
+      }
     })
     setExpandedRows(initialExpanded)
-  }, [reportItems, isLoadingReport, selectedOrgId, organizations])
-
-  const createSampleData = async (organizationName: string) => {
-    const sampleData = getSampleData()
-    const reportItems = flattenHierarchy(sampleData).map(item => ({
-      category_name: item.category_name,
-      plan_amount: item.plan_amount,
-      fact_amount: item.fact_amount,
-      execution_percent: item.execution_percent,
-      period_type: item.period_type,
-      level: item.level,
-      is_total_row: item.is_total_row,
-      is_expandable: item.is_expandable,
-      parent_category_name: findParentName(sampleData, item.parent_id)
-    }))
-
-    try {
-      const { error } = await supabase
-        .rpc('upsert_plan_fact_report', {
-          p_organization_name: organizationName,
-          p_report_date: reportDate,
-          p_report_items: reportItems
-        })
-
-      if (error) throw error
-      
-      // Reload data to apply filters
-      await loadData()
-    } catch (error) {
-      console.error('Error creating sample data:', error)
-      // If creation fails, just show the sample data
-      loadSampleData()
-    }
-  }
-
-  const findParentName = (items: PlanFactRevenueData[], parentId: string | null): string | null => {
-    if (!parentId) return null
-    let parentName: string | null = null
-    const find = (currentItems: PlanFactRevenueData[]) => {
-      for (const item of currentItems) {
-        if (item.id === parentId) parentName = item.category_name
-        if (!parentName && item.children) find(item.children)
-      }
-    }
-    find(items)
-    return parentName
-  }
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, reportDate])
 
   const flattenHierarchy = (items: PlanFactRevenueData[]): PlanFactRevenueData[] => {
     const result: PlanFactRevenueData[] = []
@@ -618,7 +567,7 @@ const PlanFactRevenueReport: React.FC = () => {
               className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">Все организации</option>
-              {organizations.map(org => (
+              {(organizations || []).map(org => (
                 <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
@@ -665,7 +614,7 @@ const PlanFactRevenueReport: React.FC = () => {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {organizations.map(org => (
+            {(organizations || []).map(org => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>

@@ -1,12 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
-
-interface Organization {
-  id: string;
-  name: string;
-}
+import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
+import { useReportItems } from '../../hooks/useReportItems'
 
 interface CashBankReportData {
   id: string
@@ -32,9 +28,7 @@ const CashBankReport: React.FC = () => {
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
-  
-  // Состояния фильтров
-  const [organizations, setOrganizations] = useState<Organization[]>([])
+
   const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [availableAccounts, setAvailableAccounts] = useState<string[]>([])
@@ -59,129 +53,63 @@ const CashBankReport: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+
+  const targetOrgIds = useMemo(() => {
+    if (isLoadingOrgs || !organizations) return null
+    return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
+  }, [selectedOrgId, organizations, isLoadingOrgs])
+
+  const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<CashBankReportData>({
+    organizationIds: targetOrgIds,
+    reportType: 'cash_bank',
+    reportDate: reportDate,
+    orderColumns: [{ column: 'level' }, { column: 'account_name' }],
+  })
+
   useEffect(() => {
-    if (user) {
-      loadData()
+    setLoading(isLoadingOrgs || isLoadingReport)
+  }, [isLoadingOrgs, isLoadingReport])
+
+  useEffect(() => {
+    if (loading) return
+
+    const hasRealData = reportItems && reportItems.length > 0 && !reportError
+    let itemsToProcess: CashBankReportData[]
+
+    if (hasRealData) {
+      itemsToProcess = reportItems
+    } else {
+      if (reportError) console.error('Error loading report data:', reportError)
+      console.warn(`No cash_bank reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+      itemsToProcess = flattenHierarchy(getSampleData())
     }
-  }, [user, reportDate, selectedOrgId, selectedAccount])
 
-  const loadData = async () => {
-    setLoading(true)
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    const accounts = [...new Set(itemsToProcess
+      .filter(item => item.level === 2 && item.account_name)
+      .map(item => item.account_name as string)
+    )]
+    setAvailableAccounts(accounts)
 
-    try {
-      // 1. Получаем все организации пользователя
-      const { data: orgMembers, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organizations(id, name)')
-        .eq('user_id', user.id)
-
-      if (memberError) throw memberError;
-      const userOrgs = (orgMembers || [])
-        .flatMap(m => m.organizations)
-        .filter(Boolean) as { id: string; name: string }[]
-      
-      if (userOrgs.length === 0) {
-        setData([])
-        setLoading(false)
-        return
-      }
-      setOrganizations(userOrgs)
-
-      // 2. Определяем, для каких организаций запрашивать данные
-      const targetOrgIds = selectedOrgId === ''
-        ? userOrgs.map(o => o.id)
-        : [selectedOrgId]
-
-      if (targetOrgIds.length === 0) {
-        setData([])
-        setLoading(false)
-        return
-      }
-      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
-
-      // 3. Параллельно запрашиваем метаданные отчетов для всех целевых организаций
-      const reportMetaPromises = userOrgs.map(org =>
-        supabase
-          .from('report_metadata')
-          .select('id')
-          .eq('organization_id', org.id)
-          .eq('report_type', 'cash_bank')
-          .eq('report_date', reportDate)
-          .maybeSingle()
+    let filteredData = itemsToProcess
+    if (selectedAccount) {
+      filteredData = itemsToProcess.filter(item =>
+        item.account_name === selectedAccount || item.is_total_row || item.level < 2
       )
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id, organization_id, organizations(name)')
-        .in('organization_id', targetOrgIds)
-        .eq('report_type', 'cash_bank')
-        .eq('report_date', reportDate)
-
-      const reportMetaResults = reportMeta || []
-      const reportIds = reportMetaResults.map(res => res.data?.id).filter(Boolean) as string[]
-
-      let allReportItems: any[] = []
-      if (reportIds.length > 0) {
-        // 4. Одним запросом получаем все строки для найденных отчетов
-        const { data: reportItems, error: itemsError } = await supabase
-          .from('cash_bank_report_items')
-          .select('*')
-          .in('report_id', reportIds)
-          .order('level')
-          .order('account_name')
-
-        if (itemsError) throw itemsError
-        allReportItems = (reportItems || []).map(item => {
-          const meta = reportMeta.find(m => m.id === item.report_id)
-          return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' }
-        })
-      } else {
-        allReportItems = []
-      }
-
-      // Если реальных данных нет, используем демонстрационные
-      if (allReportItems.length === 0) {
-        console.warn(`No cash_bank reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-        allReportItems = flattenHierarchy(getSampleData())
-      }
-
-      // 5. Заполняем фильтры и применяем их
-      const accounts = [...new Set(allReportItems
-        .filter(item => item.level === 2)
-        .map(item => item.account_name)
-        .filter((name): name is string => name !== null))]
-      setAvailableAccounts(accounts)
-
-      let filteredData = allReportItems
-      if (selectedAccount) {
-        // Фильтруем, оставляя только выбранный счет и его родительские группы
-        filteredData = allReportItems.filter(item => 
-          item.account_name === selectedAccount || item.is_total_row || item.level < 2
-        )
-      }
-      
-      // 6. Строим иерархию и обновляем состояние
-      const hierarchyData = buildHierarchy(filteredData, isConsolidatedView)
-      setData(hierarchyData)
-      
-      const initialExpanded = new Set<string>()
-      filteredData.forEach(item => {
-        if (item.level <= 2) { // Раскрываем итоговые строки, организации и типы счетов
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-
-    } catch (error) {
-      console.error('Error loading data:', error)
-      setData(buildHierarchy(flattenHierarchy(getSampleData()))) // В случае критической ошибки показываем полные демо-данные
-    } finally {
-      setLoading(false)
     }
-  }
+
+    const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(filteredData, isConsolidatedView)
+    setData(hierarchyData)
+
+    const initialExpanded = new Set<string>()
+    filteredData.forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
+      }
+    })
+    setExpandedRows(initialExpanded)
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount, reportDate])
 
   const flattenHierarchy = (items: CashBankReportData[]): CashBankReportData[] => {
     const result: CashBankReportData[] = []
@@ -636,7 +564,7 @@ const CashBankReport: React.FC = () => {
                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">Все организации</option>
-                {organizations.map(org => (
+                {(organizations || []).map(org => (
                   <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
               </select>
@@ -695,7 +623,7 @@ const CashBankReport: React.FC = () => {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {organizations.map(org => (
+            {(organizations || []).map(org => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
 import { useUserOrganizations, Organization } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
 //import { useTelegram } from '../contexts/TelegramContext'
@@ -24,7 +23,6 @@ interface InventoryTurnoverData {
 }
 
 const TelegramTurnoverReport: React.FC = () => {
-  const { user } = useAuth()
   //const { webApp } = useTelegram()
   const [data, setData] = useState<InventoryTurnoverData[]>([])
   const [loading, setLoading] = useState(true) // Combined loading state
@@ -48,32 +46,11 @@ const TelegramTurnoverReport: React.FC = () => {
     return organizations.map(o => o.id)
   }, [organizations, isLoadingOrgs])
 
-  const loadSampleData = useCallback(() => {
-    setLoading(true)
-    const sample = getSampleData()
-    const hierarchyData = buildHierarchy(flattenHierarchy(sample), false)
-    setData(hierarchyData)
-    
-    const initialExpanded = new Set<string>()
-    flattenHierarchy(sample).forEach(item => {
-      if (item.level <= 2) initialExpanded.add(item.id)
-    })
-    setExpandedRows(initialExpanded)
-    setActiveOrganizationName('Демо-данные')
-    setLoading(false)
-  }, [])
-
-  const handleReportNotFound = useCallback(() => {
-    console.warn(`No turnover report found for selected orgs on ${reportDate}.`)
-    setData([])
-  }, [reportDate]);
-
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<InventoryTurnoverData>({
     organizationIds: targetOrgIds,
     reportType: 'inventory_turnover',
     reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'category_name' }],
-    onNotFound: handleReportNotFound,
   })
 
   useEffect(() => {    
@@ -81,39 +58,54 @@ const TelegramTurnoverReport: React.FC = () => {
   }, [isLoadingOrgs, isLoadingReport])
 
   useEffect(() => {
-    if (reportError || orgsError) {
-      console.error('Error loading report data:', reportError || orgsError)
-      loadSampleData()
-    }
-  }, [reportError, orgsError, loadSampleData])
+    if (loading) return
 
-  useEffect(() => {
-    if (isLoadingReport || !reportItems) {
-      if (!isLoadingReport && !targetOrgIds && !isLoadingOrgs && !reportError) {
-        // Finished loading everything, no orgs, no items, no error.
-        setData([])
-        setActiveOrganizationName(null)
-      }
+    // Case 1: Error loading organizations. Show error and sample data.
+    if (orgsError) {
+      console.error('Error loading organizations:', orgsError)
+      const sample = flattenHierarchy(getSampleData())
+      setData(buildHierarchy(sample, false))
+      setActiveOrganizationName('Ошибка (демо-данные)')
+      setExpandedRows(new Set(sample.filter(i => i.level <= 2).map(i => i.id)))
       return
     }
-    const isConsolidatedView = (organizations?.length ?? 0) > 1
-    const hierarchyData = buildHierarchy(reportItems, isConsolidatedView)
-    setData(hierarchyData)
 
-    if (isConsolidatedView) {
-      setActiveOrganizationName('Все организации')
-    } else if (organizations?.length === 1) {
-      setActiveOrganizationName(organizations[0].name)
-    } else {
-      setActiveOrganizationName(null)
+    // Case 2: No organizations for the user. Show empty state.
+    if (organizations && organizations.length === 0) {
+      setData([])
+      setActiveOrganizationName(null) // Or "Нет организаций"
+      return
     }
 
+    // Case 3: We have organizations, now check for report data.
+    const hasRealData = reportItems && reportItems.length > 0 && !reportError
+    let itemsToProcess: InventoryTurnoverData[]
+    const isConsolidatedView = (organizations?.length ?? 0) > 1
+
+    if (hasRealData) {
+      itemsToProcess = reportItems
+      if (isConsolidatedView) {
+        setActiveOrganizationName('Все организации')
+      } else if (organizations?.length === 1) {
+        setActiveOrganizationName(organizations[0].name)
+      }
+    } else {
+      // No real data found, or there was an error fetching it. Use sample data.
+      if (reportError) console.error('Error loading report data:', reportError)
+      console.warn(`No turnover reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+      itemsToProcess = flattenHierarchy(getSampleData())
+      setActiveOrganizationName('Демо-данные')
+    }
+
+    const hierarchyData = buildHierarchy(itemsToProcess, isConsolidatedView)
+    setData(hierarchyData)
+
     const initialExpanded = new Set<string>()
-    reportItems.forEach(item => {
+    itemsToProcess.forEach(item => {
       if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
-  }, [reportItems, isLoadingReport, organizations, targetOrgIds, isLoadingOrgs, reportError])
+  }, [loading, reportItems, reportError, organizations, orgsError, reportDate])
 
   const flattenHierarchy = (items: InventoryTurnoverData[]): InventoryTurnoverData[] => {
     const result: InventoryTurnoverData[] = []

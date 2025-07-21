@@ -1,12 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
-
-interface Organization {
-  id: string;
-  name: string;
-}
+import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
+import { useReportItems } from '../../hooks/useReportItems'
 
 interface InventoryTurnoverData {
   id: string
@@ -33,10 +29,8 @@ const InventoryTurnoverReport: React.FC = () => {
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
-  
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
   // Helper function to generate UUID v4
   const generateUUID = (): string => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -57,172 +51,50 @@ const InventoryTurnoverReport: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+
+  const targetOrgIds = useMemo(() => {
+    if (isLoadingOrgs || !organizations) return null
+    return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
+  }, [selectedOrgId, organizations, isLoadingOrgs])
+
+  const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<InventoryTurnoverData>({
+    organizationIds: targetOrgIds,
+    reportType: 'inventory_turnover',
+    reportDate: reportDate,
+    orderColumns: [{ column: 'level' }, { column: 'category_name' }],
+  })
+
   useEffect(() => {
-    if (user) {
-      loadData()
+    setLoading(isLoadingOrgs || isLoadingReport)
+  }, [isLoadingOrgs, isLoadingReport])
+
+  useEffect(() => {
+    if (loading) return
+
+    const hasRealData = reportItems && reportItems.length > 0 && !reportError
+    let itemsToProcess: InventoryTurnoverData[]
+
+    if (hasRealData) {
+      itemsToProcess = reportItems
+    } else {
+      if (reportError) console.error('Error loading report data:', reportError)
+      console.warn(`No inventory turnover reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+      itemsToProcess = flattenHierarchy(getSampleData())
     }
-  }, [user, reportDate, selectedOrgId])
 
-  const loadData = async () => {
-    setLoading(true)
-    
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(itemsToProcess, isConsolidatedView)
+    setData(hierarchyData)
 
-    try {
-      // 1. Get user's organizations to populate the filter dropdown
-      const { data: orgMembers, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organizations(id, name)')
-        .eq('user_id', user.id)
-
-      if (memberError) throw memberError;
-
-      const userOrgs = (orgMembers || [])
-        .flatMap(m => m.organizations)
-        .filter(Boolean) as { id: string; name: string }[]
-      
-      setOrganizations(userOrgs)
-
-      // 2. Determine which organization to show data for
-      const targetOrgIds = selectedOrgId === ''
-        ? userOrgs.map(o => o.id)
-        : [selectedOrgId]
-
-      if (targetOrgIds.length === 0) {
-        setData([])
-        setLoading(false)
-        return
+    const initialExpanded = new Set<string>()
+    itemsToProcess.forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
       }
-
-      const isConsolidatedView = selectedOrgId === '' && targetOrgIds.length > 1
-
-      // 3. Get report metadata for the selected organization and date
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id, organization_id, organizations(name)')
-        .in('organization_id', targetOrgIds)
-        .eq('report_type', 'inventory_turnover')
-        .eq('report_date', reportDate)
-
-      if (metaError) throw metaError
-
-      if (reportMeta && reportMeta.length > 0) {
-        // 4. Get report items if metadata exists
-        const reportIds = reportMeta.map(r => r.id)
-        const { data: reportItems, error: itemsError } = await supabase
-          .from('inventory_turnover_report_items')
-          .select('*')
-          .in('report_id', reportIds)
-          .order('level')
-          .order('category_name')
-
-        if (itemsError) throw itemsError
-
-        const itemsWithOrg = (reportItems || []).map(item => {
-          const meta = reportMeta.find(m => m.id === item.report_id)
-          return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' }
-        })
-
-        const hierarchyData = buildHierarchy(itemsWithOrg, isConsolidatedView)
-        setData(hierarchyData)
-        
-        const initialExpanded = new Set<string>()
-        ;(reportItems || []).forEach(item => {
-          if (item.level <= 2) {
-            initialExpanded.add(item.id)
-          }
-        })
-        setExpandedRows(initialExpanded)
-      } else {
-        // No report for this date/org, show empty
-        setData([])
-      }
-    } catch (error) {
-      console.error('Error loading data:', error)
-      // Показываем демо-данные в случае ошибки
-      const sampleData = getSampleData()
-      
-      setData(sampleData)
-      
-      const initialExpanded = new Set<string>()
-      flattenHierarchy(sampleData).forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const createSampleData = async (organizationName: string) => {
-    const sampleData = getSampleData(organizationName)
-    const reportItems = flattenHierarchy(sampleData).map(item => ({
-      category_name: item.category_name,
-      quantity_pairs: item.quantity_pairs,
-      balance_rub: item.balance_rub,
-      dynamics_start_month_rub: item.dynamics_start_month_rub,
-      dynamics_start_month_percent: item.dynamics_start_month_percent,
-      dynamics_start_year_rub: item.dynamics_start_year_rub,
-      dynamics_start_year_percent: item.dynamics_start_year_percent,
-      turnover_days: item.turnover_days,
-      level: item.level,
-      parent_category_name: findParentName(sampleData, item.parent_category_id)
-    }))
-    
-    try {
-      const { error } = await supabase
-        .rpc('upsert_inventory_turnover_report', {
-          p_organization_name: organizationName,
-          p_report_date: reportDate,
-          p_report_items: reportItems
-        })
-
-      if (error) throw error
-      
-      // Reload data to apply filters
-      await loadData()
-    } catch (error) {
-      console.error('Error creating sample data:', error)
-      const sampleData = getSampleData(organizationName)
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.organization_name))]
-      setAvailableOrganizations(organizations)
-
-      setData(sampleData)
-      
-      // Set initial expanded rows even on error
-      const initialExpanded = new Set<string>()
-      const flatSampleData = flattenHierarchy(sampleData)
-      flatSampleData.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-    }
-  }
-
-  const findParentName = (items: InventoryTurnoverData[], parentId: string | null): string | null => {
-    if (!parentId) return null
-    let parentName: string | null = null
-    const find = (currentItems: InventoryTurnoverData[]) => {
-      for (const item of currentItems) {
-        if (item.id === parentId) parentName = item.category_name
-        if (!parentName && item.children) find(item.children)
-      }
-    }
-    find(items)
-    return parentName
-  }
+    })
+    setExpandedRows(initialExpanded)
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, reportDate])
 
   const flattenHierarchy = (items: InventoryTurnoverData[]): InventoryTurnoverData[] => {
     const result: InventoryTurnoverData[] = []
@@ -709,7 +581,7 @@ const InventoryTurnoverReport: React.FC = () => {
               className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">Все организации</option>
-              {organizations.map(org => (
+              {(organizations || []).map(org => (
                 <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
@@ -756,7 +628,7 @@ const InventoryTurnoverReport: React.FC = () => {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">Все организации</option>
-            {organizations.map(org => (
+            {(organizations || []).map(org => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}
           </select>
