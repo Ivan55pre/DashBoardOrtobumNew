@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
-import { supabase } from '../contexts/AuthContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useUserOrganizations } from '../hooks/useUserOrganizations'
+import { useReportItems } from '../hooks/useReportItems'
 //import { useTelegram } from '../contexts/TelegramContext'
 
 interface InventoryTurnoverData {
   id: string
-  organization_name: string
   category_name: string
   parent_category_id: string | null
   quantity_pairs: number
@@ -26,12 +26,12 @@ const TelegramTurnoverReport: React.FC = () => {
   const { user } = useAuth()
   //const { webApp } = useTelegram()
   const [data, setData] = useState<InventoryTurnoverData[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true) // Combined loading state
   const [reportDate, _setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [activeOrganizationName, setActiveOrganizationName] = useState<string | null>(null)
 
-  // Helper function to generate UUID v4
-  const generateUUID = (): string => {
+  const generateUUID = (): string => { // Helper function to generate UUID v4
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0
       const v = c == 'x' ? r : (r & 0x3 | 0x8)
@@ -39,114 +39,76 @@ const TelegramTurnoverReport: React.FC = () => {
     })
   }
 
-  useEffect(() => {
-    if (user) {
+  const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
+
+  const targetOrg = useMemo(() => organizations?.[0] ?? null, [organizations])
+
+  const loadSampleData = useCallback(() => {
+    setLoading(true)
+    const sample = getSampleData()
+    const hierarchyData = buildHierarchy(flattenHierarchy(sample))
+    setData(hierarchyData)
+    
+    const initialExpanded = new Set<string>()
+    flattenHierarchy(sample).forEach(item => {
+      if (item.level <= 2) {
+        initialExpanded.add(item.id)
+      }
+    })
+    setExpandedRows(initialExpanded)
+    setActiveOrganizationName('Демо-данные')
+    setLoading(false)
+  }, [])
+
+  const handleReportNotFound = useCallback(() => {
+    if (targetOrg) {
+      console.warn(`No turnover report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
+      loadSampleData()
+    } else if (!isLoadingOrgs) {
+      // No orgs and not loading them, show sample data or an empty state
       loadSampleData()
     }
-  }, [user, reportDate])
+  }, [targetOrg, reportDate, loadSampleData, isLoadingOrgs])
 
-  const loadSampleData = async () => {
-    setLoading(true)
-    
-    try {
-      const { data: existingData, error } = await supabase
-        .from('inventory_turnover_reports')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('report_date', reportDate)
-        .order('level')
-        .order('category_name')
+  const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<InventoryTurnoverData>({
+    organizationId: targetOrg?.id ?? null,
+    reportType: 'inventory_turnover',
+    reportDate: reportDate,
+    orderColumns: [{ column: 'level' }, { column: 'category_name' }],
+    onNotFound: handleReportNotFound,
+  })
 
-      if (error) throw error
+  useEffect(() => {
+    // Combined loading state: true if we are fetching orgs or the report itself
+    const stillWaiting = isLoadingOrgs || (targetOrg ? isLoadingReport : false)
+    setLoading(stillWaiting)
+  }, [isLoadingOrgs, isLoadingReport, targetOrg])
 
-      if (existingData && existingData.length > 0) {
-        const hierarchyData = buildHierarchy(existingData)
-        setData(hierarchyData)
-        // Set initial expanded rows for loaded data
-        const initialExpanded = new Set<string>()
-        existingData.forEach(item => {
-          if (item.level <= 2) {
-            initialExpanded.add(item.id)
-          }
-        })
-        setExpandedRows(initialExpanded)
-      } else {
-        // Создаем демо-данные если их нет
-        await createSampleData()
+  useEffect(() => {
+    if (reportError) {
+      console.error('Error loading report data:', reportError)
+      loadSampleData()
+    }
+  }, [reportError, loadSampleData])
+
+  useEffect(() => {
+    if (isLoadingReport || !reportItems) {
+      if (!isLoadingReport && !targetOrg && !isLoadingOrgs && !reportError) {
+        // Finished loading everything, no orgs, no items, no error.
+        setData([])
+        setActiveOrganizationName(null)
       }
-    } catch (error) {
-      console.error('Error loading data:', error)
-      // Показываем демо-данные в случае ошибки
-      const sampleData = getSampleData()
-      setData(sampleData)
-      // Set initial expanded rows for sample data
-      const initialExpanded = new Set<string>()
-      const flatSample = flattenHierarchy(sampleData)
-      flatSample.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-    } finally {
-      setLoading(false)
+      return
     }
-  }
-
-  const createSampleData = async () => {
-    const sampleData = getSampleData()
-    
-    try {
-      const dataToInsert = flattenHierarchy(sampleData).map(item => ({
-        id: item.id,
-        user_id: user?.id,
-        report_date: reportDate,
-        organization_name: item.organization_name,
-        category_name: item.category_name,
-        parent_category_id: item.parent_category_id,
-        quantity_pairs: item.quantity_pairs,
-        balance_rub: item.balance_rub,
-        dynamics_start_month_rub: item.dynamics_start_month_rub,
-        dynamics_start_month_percent: item.dynamics_start_month_percent,
-        dynamics_start_year_rub: item.dynamics_start_year_rub,
-        dynamics_start_year_percent: item.dynamics_start_year_percent,
-        turnover_days: item.turnover_days,
-        level: item.level,
-        is_total_row: item.is_total_row
-      }))
-
-      const { error } = await supabase
-        .from('inventory_turnover_reports')
-        .insert(dataToInsert)
-
-      if (error) throw error
-      
-      setData(sampleData)
-      
-      // Set initial expanded rows for sample data
-      const initialExpanded = new Set<string>()
-      const flatSample = flattenHierarchy(sampleData)
-      flatSample.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-    } catch (error) {
-      console.error('Error creating sample data:', error)
-      setData(sampleData)
-      
-      // Set initial expanded rows even on error
-      const initialExpanded = new Set<string>()
-      const flatSample = flattenHierarchy(sampleData)
-      flatSample.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
-    }
-  }
+    const hierarchyData = buildHierarchy(reportItems)
+    setData(hierarchyData)
+    setActiveOrganizationName(targetOrg?.name ?? null)
+    const initialExpanded = new Set<string>()
+    reportItems.forEach(item => {
+      if (item.level <= 2) initialExpanded.add(item.id)
+    })
+    setExpandedRows(initialExpanded)
+  }, [reportItems, isLoadingReport, targetOrg, isLoadingOrgs, reportError])
 
   const flattenHierarchy = (items: InventoryTurnoverData[]): InventoryTurnoverData[] => {
     const result: InventoryTurnoverData[] = []
@@ -164,7 +126,7 @@ const TelegramTurnoverReport: React.FC = () => {
     return result
   }
 
-  const getSampleData = (): InventoryTurnoverData[] => {
+  const getSampleData = (organizationName: string = 'ООО "ОРТОБУМ"'): InventoryTurnoverData[] => {
     // Generate UUIDs for the sample data
     const uuid1 = generateUUID()
     const uuid2 = generateUUID()
@@ -185,7 +147,6 @@ const TelegramTurnoverReport: React.FC = () => {
     return [
       {
         id: uuid1,
-        organization_name: 'Итого',
         category_name: 'Итого',
         parent_category_id: null,
         quantity_pairs: 278235531,
@@ -200,8 +161,7 @@ const TelegramTurnoverReport: React.FC = () => {
         children: [
           {
             id: uuid2,
-            organization_name: 'ООО "ОРТОБУМ"',
-            category_name: 'ООО "ОРТОБУМ"',
+            category_name: organizationName,
             parent_category_id: uuid1,
             quantity_pairs: 154455809,
             balance_rub: 29409249,
@@ -215,7 +175,6 @@ const TelegramTurnoverReport: React.FC = () => {
             children: [
               {
                 id: uuid3,
-                organization_name: 'ООО "ОРТОБУМ"',
                 category_name: 'Обувь на собственных складах',
                 parent_category_id: uuid2,
                 quantity_pairs: 42645,
@@ -230,7 +189,6 @@ const TelegramTurnoverReport: React.FC = () => {
                 children: [
                   {
                     id: uuid4,
-                    organization_name: 'ООО "ОРТОБУМ"',
                     category_name: 'Ортопедическая и комфортная обувь, Ортопедическая обувь взрослая',
                     parent_category_id: uuid3,
                     quantity_pairs: 3793,
@@ -245,7 +203,6 @@ const TelegramTurnoverReport: React.FC = () => {
                     children: [
                       {
                         id: uuid5,
-                        organization_name: 'ООО "ОРТОБУМ"',
                         category_name: 'Ботинки женские',
                         parent_category_id: uuid4,
                         quantity_pairs: 416,
@@ -264,7 +221,6 @@ const TelegramTurnoverReport: React.FC = () => {
               },
               {
                 id: uuid12,
-                organization_name: 'ООО "ОРТОБУМ"',
                 category_name: 'Обувь на складах комиссионеров',
                 parent_category_id: uuid2,
                 quantity_pairs: 40521,
@@ -279,7 +235,6 @@ const TelegramTurnoverReport: React.FC = () => {
                 children: [
                   {
                     id: uuid13,
-                    organization_name: 'РВБ ООО',
                     category_name: 'РВБ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 13159,
@@ -294,7 +249,6 @@ const TelegramTurnoverReport: React.FC = () => {
                   },
                   {
                     id: uuid14,
-                    organization_name: 'ИНТЕРНЕТ РЕШЕНИЯ ООО',
                     category_name: 'ИНТЕРНЕТ РЕШЕНИЯ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 11029,
@@ -309,7 +263,6 @@ const TelegramTurnoverReport: React.FC = () => {
                   },
                   {
                     id: uuid15,
-                    organization_name: 'КУПИШУЗ ООО',
                     category_name: 'КУПИШУЗ ООО',
                     parent_category_id: uuid12,
                     quantity_pairs: 1774,
@@ -479,8 +432,10 @@ const TelegramTurnoverReport: React.FC = () => {
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center space-x-3">
           <Menu className="w-6 h-6 text-gray-600" />
-          <h1 className="text-lg font-semibold text-gray-900 truncate">
-            Товарные запасы и оборач...
+          <h1 className="text-base font-semibold text-gray-900 truncate">
+            {activeOrganizationName 
+              ? `Запасы (${activeOrganizationName})` 
+              : 'Товарные запасы и оборачиваемость'}
           </h1>
         </div>
       </div>

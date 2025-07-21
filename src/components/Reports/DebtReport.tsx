@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { supabase } from '../../contexts/AuthContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { useUserOrganizations } from '../../hooks/useUserOrganizations'
+import { useReportItems } from '../../hooks/useReportItems'
 
 interface DebtReportData {
   id: string
@@ -26,11 +27,8 @@ const DebtReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  // Filter states
   const [selectedOrganization, setSelectedOrganization] = useState<string>('')
   const [selectedCustomer, setSelectedCustomer] = useState<string>('')
-  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
-  const [availableCustomers, setAvailableCustomers] = useState<string[]>([])
 
   // Helper function to generate UUID v4
   const generateUUID = (): string => {
@@ -40,6 +38,8 @@ const DebtReport: React.FC = () => {
       return v.toString(16)
     })
   }
+
+  const { organizations: availableOrganizations, isLoading: isLoadingOrgs } = useUserOrganizations()
 
   useEffect(() => {
     const checkMobile = () => {
@@ -52,106 +52,6 @@ const DebtReport: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user, reportDate, selectedOrganization, selectedCustomer])
-
-  const loadData = async () => {
-    setLoading(true)
-    
-    if (!user) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      // 1. Get user's organizations to populate the filter dropdown
-      const { data: orgMembers, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organizations(id, name)')
-        .eq('user_id', user.id)
-
-      if (memberError) throw memberError;
-
-      const userOrgs = (orgMembers || [])
-        .flatMap(m => m.organizations)
-        .filter(Boolean) as { id: string; name: string }[]
-
-      if (userOrgs.length > 0) {
-        setAvailableOrganizations(userOrgs.map(o => o.name))
-      }
-
-      // 2. Determine which organization to show data for
-      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : null)
-      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
-
-      if (!targetOrg) {
-        throw new Error("No organization selected or user has no organizations.")
-      }
-
-      // 3. Get report metadata for the selected organization and date
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id')
-        .eq('organization_id', targetOrg.id)
-        .eq('report_type', 'debt') // Report type for debt
-        .eq('report_date', reportDate)
-        .maybeSingle()
-
-      if (metaError) throw metaError
-
-      if (reportMeta?.id) {
-        // 4. Get report items if metadata exists
-        const { data: reportItems, error: itemsError } = await supabase
-          .from('debt_reports_items')
-          .select('*')
-          .eq('report_id', reportMeta.id)
-          .order('level')
-          .order('client_name')
-
-        if (itemsError) throw itemsError
-
-        // Populate customer filter from loaded data.
-        // Note: 'organization_type' is not in the DB table, so we take all level 3+ items.
-        const customers = [...new Set((reportItems || [])
-          .filter(item => item.level >= 3)
-          .map(item => item.client_name))]
-        setAvailableCustomers(customers)
-
-        let filteredData = reportItems || []
-        if (selectedCustomer) {
-          // This filter logic might need adjustment as organization_type is not available in DB data
-          filteredData = filteredData.filter(item => 
-            item.client_name === selectedCustomer || 
-            item.is_total_row ||
-            item.level <= 2
-          )
-        }
-        
-        const hierarchyData = buildHierarchy(filteredData)
-        setData(hierarchyData)
-        
-        const initialExpanded = new Set<string>()
-        ;(filteredData || []).forEach(item => {
-          if (item.level <= 2) {
-            initialExpanded.add(item.id)
-          }
-        })
-        setExpandedRows(initialExpanded)
-      } else {
-        console.warn(`No debt report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
-        loadSampleData()
-      }
-    } catch (error) {
-      console.error('Error loading data:', error)
-      loadSampleData()
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const loadSampleData = () => {
     setLoading(true)
     const sampleData = getSampleData()
@@ -159,14 +59,8 @@ const DebtReport: React.FC = () => {
 
     // Populate filter options from sample data
     const organizations = [...new Set(flatSample
-      .filter(item => item.level === 1)
-      .map(item => item.client_name))]
-    setAvailableOrganizations(organizations)
-
-    const customers = [...new Set(flatSample
       .filter(item => item.organization_type === 'buyer' && item.level >= 3)
       .map(item => item.client_name))]
-    setAvailableCustomers(customers)
 
     // Apply filters to sample data
     let filteredSample = flatSample
@@ -212,6 +106,65 @@ const DebtReport: React.FC = () => {
     setExpandedRows(initialExpanded)
     setLoading(false)
   }
+
+  const targetOrg = useMemo(() => {
+    const targetOrgName = selectedOrganization || (availableOrganizations.length > 0 ? availableOrganizations[0].name : null)
+    return availableOrganizations.find(o => o.name === targetOrgName)
+  }, [selectedOrganization, availableOrganizations])
+
+  const handleReportNotFound = useCallback(() => {
+    if (targetOrg) {
+      console.warn(`No debt report found for ${targetOrg.name} on ${reportDate}. Falling back to sample data.`)
+      loadSampleData()
+    }
+  }, [targetOrg, reportDate]);
+
+  const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<DebtReportData>({
+    organizationId: targetOrg?.id ?? null,
+    reportType: 'debt',
+    reportDate: reportDate,
+    orderColumns: [{ column: 'level' }, { column: 'client_name' }],
+    onNotFound: handleReportNotFound
+  })
+
+  // Set loading state based on all loading sources
+  useEffect(() => {
+    setLoading(isLoadingOrgs || isLoadingReport)
+  }, [isLoadingOrgs, isLoadingReport])
+
+  // Handle report error
+  useEffect(() => {
+    if (reportError) {
+      console.error('Error loading report data:', reportError)
+      loadSampleData()
+    }
+  }, [reportError])
+
+  // Process data from hook into hierarchical view
+  useEffect(() => {
+    if (isLoadingReport || !reportItems) {
+      if (!isLoadingReport) setData([]); // Clear data if loading finished and no items
+      return;
+    }
+
+    let filteredData = reportItems
+    if (selectedCustomer) {
+      filteredData = filteredData.filter(item =>
+        item.client_name === selectedCustomer ||
+        item.is_total_row ||
+        item.level <= 2
+      )
+    }
+
+    const hierarchyData = buildHierarchy(filteredData)
+    setData(hierarchyData)
+
+    const initialExpanded = new Set<string>()
+    filteredData.forEach(item => {
+      if (item.level <= 2) initialExpanded.add(item.id)
+    })
+    setExpandedRows(initialExpanded)
+  }, [reportItems, isLoadingReport, selectedCustomer])
 
   const flattenHierarchy = (items: DebtReportData[]): DebtReportData[] => {
     const result: DebtReportData[] = []
@@ -566,6 +519,14 @@ const DebtReport: React.FC = () => {
     )
   }
 
+  // Derived state for customer dropdown
+  const availableCustomers = useMemo(() => {
+    if (!reportItems) return []
+    return [...new Set((reportItems)
+      .filter(item => item.level >= 3)
+      .map(item => item.client_name))]
+  }, [reportItems])
+
   if (loading) {
     return (
       <div className="card p-6">
@@ -677,7 +638,7 @@ const DebtReport: React.FC = () => {
           >
             <option value="">Все организации</option>
             {availableOrganizations.map(org => (
-              <option key={org} value={org}>{org}</option>
+              <option key={org.name} value={org.name}>{org.name}</option>
             ))}
           </select>
 
