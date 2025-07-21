@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3 } from 'lucide-react'
+import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3, ChevronsUpDown } from 'lucide-react'
 import { supabase } from '../contexts/AuthContext'
+import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { useAuth } from '../contexts/AuthContext'
 //import { useTelegram } from '../contexts/TelegramContext'
 
@@ -29,29 +30,53 @@ const TelegramDashboard: React.FC = () => {
     planFactChange: 0
   })
   const [loading, setLoading] = useState(true)
+  const [hasOrganizations, setHasOrganizations] = useState(true)
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
+  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
 
   useEffect(() => {
     if (user) {
       loadDashboardData()
     }
-  }, [user])
+  }, [user, selectedOrganization])
 
   const loadDashboardData = async () => {
     setLoading(true)
     try {
-      // Шаг 1: Найти организацию, к которой принадлежит пользователь.
-      // Это ключевой шаг, так как все отчеты привязаны к организации.
-      const { data: orgMember, error: orgError } = await supabase
+      // 1. Get user's organizations to populate the filter dropdown
+      const { data: orgMembers, error: memberError } = await supabase
         .from('organization_members')
-        .select('organization_id')
+        .select('organizations(id, name)')
         .eq('user_id', user!.id)
-        .limit(1)
-        .single()
 
-      if (orgError || !orgMember) {
-        throw new Error('Пользователь не состоит в организации или не удалось ее найти.')
+      if (memberError) throw memberError;
+
+      const userOrgs = (orgMembers || [])
+        .flatMap(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
+
+      if (userOrgs.length === 0) {
+        setHasOrganizations(false)
+        setLoading(false)
+        return
       }
-      const organizationId = orgMember.organization_id
+      setHasOrganizations(true)
+
+      if (userOrgs.length > 0) {
+        setAvailableOrganizations(userOrgs.map(o => o.name))
+      }
+
+      // 2. Determine which organization to show data for
+      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : '')
+      if (!selectedOrganization && userOrgs.length > 0) {
+        setSelectedOrganization(userOrgs[0].name)
+      }
+      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+
+      if (!targetOrg) {
+        throw new Error("No organization selected or user has no organizations.")
+      }
+      const organizationId = targetOrg.id
 
       // Загружаем данные из всех отчетов
       const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
@@ -266,16 +291,38 @@ const TelegramDashboard: React.FC = () => {
     )
   }
 
+  if (!hasOrganizations) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <NoOrganizationState />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <h1 className="text-lg font-semibold text-gray-900">
-          Business Dashboard
-        </h1>
-        <p className="text-sm text-gray-500">
-          Сводка по основным показателям
-        </p>
+      <div className="bg-white border-b border-gray-200 px-4 py-3 space-y-2">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">
+            Business Dashboard
+          </h1>
+          <p className="text-sm text-gray-500">
+            Сводка по основным показателям
+          </p>
+        </div>
+        <div className="relative">
+          <select
+            value={selectedOrganization}
+            onChange={(e) => setSelectedOrganization(e.target.value)}
+            className="w-full appearance-none bg-gray-100 border border-gray-200 text-gray-700 py-2 px-3 pr-8 rounded-lg leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+          >
+            {availableOrganizations.map(org => (
+              <option key={org} value={org}>{org}</option>
+            ))}
+          </select>
+          <ChevronsUpDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+        </div>
       </div>
 
       {/* Content */}

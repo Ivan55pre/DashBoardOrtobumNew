@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
-import { TrendingUp, TrendingDown, Package, CreditCard, Banknote, FileText, BarChart3 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Package, CreditCard, Banknote, FileText, BarChart3, ChevronsUpDown } from 'lucide-react'
+import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { supabase } from '../contexts/AuthContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -29,6 +30,9 @@ const Dashboard: React.FC = () => {
     planFactChange: 0
   })
   const [loading, setLoading] = useState(true)
+  const [hasOrganizations, setHasOrganizations] = useState(true)
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
+  const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
 
   const [widgets, setWidgets] = useState([
     { 
@@ -77,22 +81,45 @@ const Dashboard: React.FC = () => {
     if (user) {
       loadDashboardData()
     }
-  }, [user])
+  }, [user, selectedOrganization])
 
   const loadDashboardData = async () => {
     setLoading(true)
     try {
-      const { data: orgMember, error: orgError } = await supabase
+      // 1. Get user's organizations to populate the filter dropdown
+      const { data: orgMembers, error: memberError } = await supabase
         .from('organization_members')
-        .select('organization_id')
+        .select('organizations(id, name)')
         .eq('user_id', user!.id)
-        .limit(1)
-        .single()
 
-      if (orgError || !orgMember) {
-        throw new Error('User is not part of any organization or failed to fetch organization.')
+      if (memberError) throw memberError;
+
+      const userOrgs = (orgMembers || [])
+        .flatMap(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
+
+      if (userOrgs.length === 0) {
+        setHasOrganizations(false)
+        setLoading(false)
+        return
       }
-      const organizationId = orgMember.organization_id
+      setHasOrganizations(true)
+
+      if (userOrgs.length > 0) {
+        setAvailableOrganizations(userOrgs.map(o => o.name))
+      }
+
+      // 2. Determine which organization to show data for
+      const targetOrgName = selectedOrganization || (userOrgs.length > 0 ? userOrgs[0].name : '')
+      if (!selectedOrganization && userOrgs.length > 0) {
+        setSelectedOrganization(userOrgs[0].name)
+      }
+      const targetOrg = userOrgs.find(o => o.name === targetOrgName)
+
+      if (!targetOrg) {
+        throw new Error("No organization selected or user has no organizations.")
+      }
+      const organizationId = targetOrg.id
 
       // Загружаем данные из всех отчетов
       const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
@@ -374,18 +401,52 @@ const Dashboard: React.FC = () => {
     window.location.href = '/reports'
   }
 
+  if (loading) {
+    return (
+      <div className="card p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-6"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!hasOrganizations) {
+    return <NoOrganizationState />
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
           Dashboard
         </h1>
-        <button
-          onClick={navigateToReports}
-          className="btn-primary text-sm md:text-base"
-        >
-          Все отчеты
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <select
+              value={selectedOrganization}
+              onChange={(e) => setSelectedOrganization(e.target.value)}
+              className="appearance-none btn-secondary text-sm md:text-base pr-8"
+            >
+              {availableOrganizations.map(org => (
+                <option key={org} value={org}>{org}</option>
+              ))}
+            </select>
+            <ChevronsUpDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          </div>
+          <button
+            onClick={navigateToReports}
+            className="btn-primary text-sm md:text-base"
+          >
+            Все отчеты
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
