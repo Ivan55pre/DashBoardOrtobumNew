@@ -20,6 +20,8 @@ interface CashBankReportData {
   expanded?: boolean
 }
 
+const ALL_ORGS_KEY = '' // Используем пустую строку как ключ для "Всех организаций"
+
 const CashBankReport: React.FC = () => {
   const { user } = useAuth()
   const [data, setData] = useState<CashBankReportData[]>([])
@@ -28,8 +30,8 @@ const CashBankReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
   
-  // Filter states
-  const [selectedOrganization, setSelectedOrganization] = useState<string>('')
+  // Состояния фильтров
+  const [selectedOrganization, setSelectedOrganization] = useState<string>(ALL_ORGS_KEY)
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [availableOrganizations, setAvailableOrganizations] = useState<string[]>([])
   const [availableAccounts, setAvailableAccounts] = useState<string[]>([])
@@ -62,181 +64,106 @@ const CashBankReport: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true)
-    
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const { data: existingData, error } = await supabase
-        .from('cash_bank_reports')
-        .select('*')
-        .eq('report_date', reportDate)
-        .order('level', { ascending: true })
-        .order('account_name', { ascending: true })
+      // 1. Получаем все организации пользователя
+      const { data: orgMembers, error: memberError } = await supabase
+        .from('organization_members')
+        .select('organizations(id, name)')
+        .eq('user_id', user.id)
 
-      if (error) throw error
+      if (memberError) throw memberError;
+      const userOrgs = (orgMembers || [])
+        .flatMap(m => m.organizations)
+        .filter(Boolean) as { id: string; name: string }[]
 
-      if (existingData && existingData.length > 0) {
-        // Populate filter options
-        const organizations = [...new Set(existingData
-          .filter(item => item.level === 1)
-          .map(item => item.account_name)
-          .filter((name): name is string => name !== null))]
-        setAvailableOrganizations(organizations)
-
-        const accounts = [...new Set(existingData
-          .filter(item => item.level === 2)
-          .map(item => item.account_name)
-          .filter((name): name is string => name !== null))]
-        setAvailableAccounts(accounts)
-
-        // Apply filters
-        let filteredData = existingData
-        
-        if (selectedOrganization) {
-          filteredData = filteredData.filter(item => 
-            item.account_name === selectedOrganization || 
-            item.is_total_row ||
-            (item.level > 1 && existingData.some(parent => 
-              parent.id === item.parent_id && 
-              parent.account_name === selectedOrganization
-            ))
-          )
-        }
-
-        if (selectedAccount) {
-          filteredData = filteredData.filter(item => 
-            item.account_name === selectedAccount || 
-            item.is_total_row ||
-            item.level <= 1
-          )
-        }
-
-        const hierarchyData = buildHierarchy(filteredData)
-        setData(hierarchyData)
-        
-        // Set initial expanded rows for loaded data
-        const initialExpanded = new Set<string>()
-        filteredData.forEach(item => {
-          if (item.level <= 2) {
-            initialExpanded.add(item.id)
-          }
-        })
-        setExpandedRows(initialExpanded)
-      } else {
-        // Создаем демо-данные если их нет
-        await createSampleData('Маркова-Дорей Ю.В. ИП')
+      if (userOrgs.length === 0) {
+        setData([])
+        setLoading(false)
+        return
       }
-    } catch (error) {
-      console.error('Error loading data:', error)
-      // Показываем демо-данные в случае ошибки
-      const sampleData = getSampleData()
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.account_name)
-        .filter((name): name is string => name !== null))]
-      setAvailableOrganizations(organizations)
+      setAvailableOrganizations(userOrgs.map(o => o.name))
 
-      const accounts = [...new Set(flatSample
+      // 2. Определяем, для каких организаций запрашивать данные
+      const targetOrgs = selectedOrganization === ALL_ORGS_KEY
+        ? userOrgs
+        : userOrgs.filter(o => o.name === selectedOrganization)
+
+      if (targetOrgs.length === 0) {
+        setData([])
+        setLoading(false)
+        return
+      }
+
+      // 3. Параллельно запрашиваем метаданные отчетов для всех целевых организаций
+      const reportMetaPromises = targetOrgs.map(org =>
+        supabase
+          .from('report_metadata')
+          .select('id')
+          .eq('organization_id', org.id)
+          .eq('report_type', 'cash_bank')
+          .eq('report_date', reportDate)
+          .maybeSingle()
+      )
+      const reportMetaResults = await Promise.all(reportMetaPromises)
+      const reportIds = reportMetaResults.map(res => res.data?.id).filter(Boolean) as string[]
+
+      let allReportItems: any[] = []
+      if (reportIds.length > 0) {
+        // 4. Одним запросом получаем все строки для найденных отчетов
+        const { data: reportItems, error: itemsError } = await supabase
+          .from('cash_bank_report_items')
+          .select('*')
+          .in('report_id', reportIds)
+          .order('level')
+          .order('account_name')
+
+        if (itemsError) throw itemsError
+        allReportItems = reportItems || []
+      }
+
+      // Если реальных данных нет, используем демонстрационные
+      if (allReportItems.length === 0) {
+        console.warn(`No cash_bank reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
+        allReportItems = flattenHierarchy(getSampleData())
+      }
+
+      // 5. Заполняем фильтры и применяем их
+      const accounts = [...new Set(allReportItems
         .filter(item => item.level === 2)
         .map(item => item.account_name)
         .filter((name): name is string => name !== null))]
       setAvailableAccounts(accounts)
 
-      // Apply filters to sample data
-      let filteredSample = flatSample
-      
-      if (selectedOrganization) {
-        filteredSample = filteredSample.filter(item =>
-          item.account_name === selectedOrganization ||
-          item.is_total_row ||
-          (item.level > 1 && flatSample.some(parent => 
-            parent.id === item.parent_id &&
-            parent.account_name === selectedOrganization
-          ))
-        )
-      }
-
+      let filteredData = allReportItems
       if (selectedAccount) {
-        filteredSample = filteredSample.filter(item => 
-          item.account_name === selectedAccount || 
-          item.is_total_row ||
-          item.level <= 1
+        // Фильтруем, оставляя только выбранный счет и его родительские группы
+        filteredData = allReportItems.filter(item => 
+          item.account_name === selectedAccount || item.is_total_row || item.level < 2
         )
       }
-
-      const hierarchyData = buildHierarchy(filteredSample)
+      
+      // 6. Строим иерархию и обновляем состояние
+      const hierarchyData = buildHierarchy(filteredData)
       setData(hierarchyData)
       
-      // Set initial expanded rows for sample data
       const initialExpanded = new Set<string>()
-      filteredSample.forEach(item => {
-        if (item.level <= 2) {
+      filteredData.forEach(item => {
+        if (item.level <= 2) { // Раскрываем итоговые строки, организации и типы счетов
           initialExpanded.add(item.id)
         }
       })
       setExpandedRows(initialExpanded)
+
+    } catch (error) {
+      console.error('Error loading data:', error)
+      setData(buildHierarchy(flattenHierarchy(getSampleData()))) // В случае критической ошибки показываем полные демо-данные
     } finally {
       setLoading(false)
-    }
-  }
-
-  const createSampleData = async (organizationName: string) => {
-    const sampleData = getSampleData(organizationName)
-    const reportItems = flattenHierarchy(sampleData).map(item => ({
-      account_name: item.account_name,
-      subconto: item.subconto,
-      balance_start: item.balance_start,
-      income_amount: item.income_amount,
-      expense_amount: item.expense_amount,
-      balance_current: item.balance_current,
-      account_type: item.account_type,
-      level: item.level,
-      currency: 'RUB',
-      is_total_row: item.is_total_row,
-    }))
-    
-    try {
-      const { error } = await supabase
-        .rpc('upsert_cash_bank_report', {
-          p_organization_name: organizationName,
-          p_report_date: reportDate,
-          p_report_items: reportItems
-        })
-
-      if (error) throw error
-      
-      // Reload data to apply filters
-      await loadData()
-    } catch (error) {
-      console.error('Error creating sample data:', error)
-      const sampleData = getSampleData()
-      
-      // Populate filter options from sample data
-      const flatSample = flattenHierarchy(sampleData)
-      const organizations = [...new Set(flatSample
-        .filter(item => item.level === 1)
-        .map(item => item.account_name)
-        .filter((name): name is string => name !== null))]
-      setAvailableOrganizations(organizations)
-
-      const accounts = [...new Set(flatSample
-        .filter(item => item.level === 2)
-        .map(item => item.account_name)
-        .filter((name): name is string => name !== null))]
-      setAvailableAccounts(accounts)
-
-      setData(sampleData)
-      
-      // Set initial expanded rows even on error
-      const initialExpanded = new Set<string>()
-      const flatSampleData = flattenHierarchy(sampleData)
-      flatSampleData.forEach(item => {
-        if (item.level <= 2) {
-          initialExpanded.add(item.id)
-        }
-      })
-      setExpandedRows(initialExpanded)
     }
   }
 
@@ -404,31 +331,33 @@ const CashBankReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: CashBankReportData[]): CashBankReportData[] => {
+  // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
+  // Этот метод надежнее, чем построение на основе уровней (level).
+  const buildHierarchy = (flatData: any[]): CashBankReportData[] => {
+    const map = new Map<string, any>()
     const roots: CashBankReportData[] = []
-    if (!flatData || flatData.length === 0) return roots
 
-    const parentStack: (CashBankReportData & { children: CashBankReportData[] })[] = []
-
-    // Data must be sorted by level
-    const sortedData = [...flatData].sort((a, b) => a.level - b.level || (a.account_name || '').localeCompare(b.account_name || ''))
-
-    for (const item of sortedData) {
-      const node = { ...item, children: [] as CashBankReportData[], expanded: true }
-
-      while (parentStack.length > 0 && node.level <= parentStack[parentStack.length - 1].level) {
-        parentStack.pop()
-      }
-
-      if (parentStack.length === 0) {
-        roots.push(node)
-      } else {
-        const parent = parentStack[parentStack.length - 1]
-        parent.children.push(node)
-        node.parent_id = parent.id
-      }
-      parentStack.push(node)
+    if (!flatData || flatData.length === 0) {
+      return roots
     }
+
+    // 1. Создаем карту, где ключ - это ID элемента, а значение - сам элемент с пустым массивом children.
+    flatData.forEach(item => {
+      map.set(item.id, { ...item, children: [] })
+    })
+
+    // 2. Проходим по списку еще раз, чтобы разместить каждый узел в children его родителя.
+    flatData.forEach(item => {
+      const node = map.get(item.id)
+      if (item.parent_id && map.has(item.parent_id)) {
+        // Если у элемента есть родитель, добавляем его в массив children родителя.
+        const parent = map.get(item.parent_id)
+        parent.children.push(node)
+      } else {
+        // Если родителя нет, это корневой элемент.
+        roots.push(node)
+      }
+    })
 
     return roots
   }
@@ -671,7 +600,7 @@ const CashBankReport: React.FC = () => {
                 onChange={(e) => setSelectedOrganization(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
-                <option value="">Все организации</option>
+                <option value={ALL_ORGS_KEY}>Все организации</option>
                 {availableOrganizations.map(org => (
                   <option key={org} value={org}>{org}</option>
                 ))}
@@ -730,7 +659,7 @@ const CashBankReport: React.FC = () => {
             onChange={(e) => setSelectedOrganization(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
-            <option value="">Все организации</option>
+            <option value={ALL_ORGS_KEY}>Все организации</option>
             {availableOrganizations.map(org => (
               <option key={org} value={org}>{org}</option>
             ))}
