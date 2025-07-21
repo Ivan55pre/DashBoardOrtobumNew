@@ -277,12 +277,14 @@ CREATE TABLE IF NOT EXISTS n8n_chat_histories (
 -- Включаем RLS для новой таблицы
 ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
 
--- Политика SELECT: Пользователи могут видеть всех членов организаций, в которых они состоят.
--- Это необходимо, чтобы другие политики (INSERT, UPDATE, DELETE) могли проверить роль пользователя.
-CREATE POLICY "Users can view members of their own organizations."
+-- Политика SELECT: Пользователи могут видеть только свою собственную запись о членстве.
+-- Этого достаточно для клиентских запросов, чтобы определить, в каких организациях состоит пользователь.
+-- Для получения полного списка членов организации используется RPC-функция `get_organization_members`,
+-- которая работает в обход RLS (через SECURITY DEFINER).
+CREATE POLICY "Users can view their own membership record."
 ON organization_members FOR SELECT
 USING (
-  public.is_member_of(organization_members.organization_id, auth.uid())
+  user_id = auth.uid()
 );
 
 -- Политика INSERT: Администраторы могут добавлять новых членов; пользователи могут присоединиться к новой (пустой) организации.
