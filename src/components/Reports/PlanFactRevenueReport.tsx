@@ -428,31 +428,31 @@ const PlanFactRevenueReport: React.FC = () => {
     ]
   }
 
-  const buildHierarchy = (flatData: PlanFactRevenueData[]): PlanFactRevenueData[] => {
+  // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
+  // Этот метод надежнее, чем построение на основе уровней (level).
+  const buildHierarchy = (flatData: any[]): PlanFactRevenueData[] => {
+    const map = new Map<string, any>()
     const roots: PlanFactRevenueData[] = []
-    if (!flatData || flatData.length === 0) return roots
 
-    const parentStack: (PlanFactRevenueData & { children: PlanFactRevenueData[] })[] = []
-
-    // Data must be sorted by level
-    const sortedData = [...flatData].sort((a, b) => a.level - b.level || a.category_name.localeCompare(b.category_name))
-
-    for (const item of sortedData) {
-      const node = { ...item, children: [] as PlanFactRevenueData[], expanded: true }
-
-      while (parentStack.length > 0 && node.level <= parentStack[parentStack.length - 1].level) {
-        parentStack.pop()
-      }
-
-      if (parentStack.length === 0) {
-        roots.push(node)
-      } else {
-        const parent = parentStack[parentStack.length - 1]
-        parent.children.push(node)
-        node.parent_id = parent.id
-      }
-      parentStack.push(node)
+    if (!flatData || flatData.length === 0) {
+      return roots
     }
+
+    // 1. Создаем карту, где ключ - это ID элемента, а значение - сам элемент с пустым массивом children.
+    flatData.forEach(item => {
+      map.set(item.id, { ...item, children: [] })
+    })
+
+    // 2. Проходим по списку еще раз, чтобы разместить каждый узел в children его родителя.
+    flatData.forEach(item => {
+      const node = map.get(item.id)
+      if (item.parent_id && map.has(item.parent_id)) {
+        const parent = map.get(item.parent_id)
+        parent.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    })
 
     return roots
   }

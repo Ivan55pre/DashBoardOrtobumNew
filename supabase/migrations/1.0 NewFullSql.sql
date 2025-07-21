@@ -454,6 +454,10 @@ CREATE TABLE cash_bank_report_items (
 	created_at timestamptz default now() not null
 );
 
+-- Добавляем поле для иерархии
+ALTER TABLE public.cash_bank_report_items
+ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.cash_bank_report_items(id) ON DELETE SET NULL;
+
 -- Function and trigger for cash bank report items timestamp
 create or replace function update_cash_bank_report_items_timestamp () returns trigger as $$
 BEGIN
@@ -572,35 +576,77 @@ DECLARE
     v_organization_id UUID;
     v_report_id UUID;
     item JSONB;
+    v_item_id UUID;
+    v_parent_id UUID;
 BEGIN
-    -- Шаг 1: Найти или создать организацию по имени.
-    -- ON CONFLICT гарантирует, что мы не создадим дубликат.
+    -- Шаг 1: Найти или создать организацию.
     INSERT INTO public.organizations (name)
     VALUES (p_organization_name)
     ON CONFLICT (name) DO UPDATE
-    SET name = EXCLUDED.name -- Это действие нужно для RETURNING, даже если имя не меняется
+    SET name = EXCLUDED.name
     RETURNING id INTO v_organization_id;
 
     -- Шаг 2: Найти или создать метаданные отчета.
-    -- Если отчет за эту дату уже существует, мы просто получим его ID и обновим дату.
     INSERT INTO public.report_metadata (organization_id, report_type, report_date, updated_at)
     VALUES (v_organization_id, 'cash_bank', p_report_date, NOW())
     ON CONFLICT (organization_id, report_type, report_date) DO UPDATE
     SET updated_at = NOW()
     RETURNING id INTO v_report_id;
 
-    -- Шаг 3: (Рекомендуется) Удалить старые данные для этого отчета,
-    -- чтобы избежать дубликатов при повторной загрузке.
+    -- Шаг 3: Удалить старые данные для этого отчета.
     DELETE FROM public.cash_bank_report_items WHERE report_id = v_report_id;
 
-    -- Шаг 4: Вставить новые строки отчета из JSON-массива.
+    -- Шаг 4: Вставить новые строки отчета, обрабатывая иерархию.
+    -- Создаем временную таблицу для сопоставления имен счетов с их новыми UUID.
+    CREATE TEMP TABLE temp_account_map (
+        account_name TEXT PRIMARY KEY,
+        item_id UUID NOT NULL
+    ) ON COMMIT DROP;
+
+    -- Первый проход: вставляем все элементы с NULL в parent_id и заполняем карту.
     FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
     LOOP
-        INSERT INTO public.cash_bank_report_items (report_id, account_name, subconto, balance_start, income_amount, expense_amount, balance_current, account_type, level,currency, is_total_row)
-        VALUES (v_report_id, item->>'account_name', item->>'subconto', (item->>'balance_start')::DECIMAL, (item->>'income_amount')::DECIMAL, (item->>'expense_amount')::DECIMAL, (item->>'balance_current')::DECIMAL, item->>'account_type', (item->>'level')::INTEGER, item->>'currency', (item->>'is_total_row')::BOOLEAN);
+        INSERT INTO public.cash_bank_report_items (
+            report_id, account_name, subconto, balance_start, 
+            income_amount, expense_amount, balance_current, 
+            account_type, level, currency, is_total_row, parent_id
+        )
+        VALUES (
+            v_report_id, 
+            item->>'account_name', 
+            item->>'subconto', 
+            (item->>'balance_start')::DECIMAL, 
+            (item->>'income_amount')::DECIMAL, 
+            (item->>'expense_amount')::DECIMAL, 
+            (item->>'balance_current')::DECIMAL, 
+            item->>'account_type', 
+            (item->>'level')::INTEGER, 
+            item->>'currency', 
+            (item->>'is_total_row')::BOOLEAN,
+            NULL -- parent_id изначально NULL
+        )
+        RETURNING id INTO v_item_id;
+
+        -- Добавляем запись в карту. Убедитесь, что account_name уникален для каждой строки в JSON.
+        INSERT INTO temp_account_map (account_name, item_id) 
+        VALUES (item->>'account_name', v_item_id)
+        ON CONFLICT (account_name) DO NOTHING; -- Игнорируем дубликаты, если они есть
     END LOOP;
 
-    -- Возвращаем ID созданного или обновленного отчета для подтверждения.
+    -- Второй проход: обновляем parent_id, используя карту.
+    -- Предполагается, что в JSON есть поле 'parent_account_name'.
+    FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
+    LOOP
+        IF item->>'parent_account_name' IS NOT NULL AND item->>'parent_account_name' != '' THEN
+            SELECT item_id INTO v_parent_id FROM temp_account_map WHERE account_name = item->>'parent_account_name';
+            IF v_parent_id IS NOT NULL THEN
+                -- Находим строку по уникальному имени счета в рамках этого отчета и обновляем ее
+                UPDATE public.cash_bank_report_items SET parent_id = v_parent_id
+                WHERE report_id = v_report_id AND account_name = item->>'account_name';
+            END IF;
+        END IF;
+    END LOOP;
+
     RETURN v_report_id;
 END;
 $$;
