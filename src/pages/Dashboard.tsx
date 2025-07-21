@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-//import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+//import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
 import { TrendingUp, TrendingDown, Package, CreditCard, Banknote, FileText, BarChart3, ChevronsUpDown } from 'lucide-react'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { supabase } from '../contexts/AuthContext'
