@@ -263,12 +263,39 @@ const TelegramTurnoverReport: React.FC = () => {
     )
   }
 
-  if (loading) {
+  const TelegramReportSkeleton: React.FC = () => {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen bg-gray-50 animate-pulse">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center space-x-3">
+            <div className="h-6 w-6 bg-gray-300 rounded"></div>
+            <div className="h-5 bg-gray-300 rounded w-3/5"></div>
+          </div>
+        </div>
+  
+        {/* Content */}
+        <div className="p-4 space-y-5">
+          {[...Array(10)].map((_, i) => (
+            <div key={i} className="flex items-start justify-between space-x-4">
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+              </div>
+              <div className="w-1/3 space-y-2">
+                <div className="h-4 bg-gray-300 rounded"></div>
+                <div className="h-3 bg-gray-300 rounded w-5/6 ml-auto"></div>
+                <div className="h-3 bg-gray-300 rounded w-full ml-auto"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
+  }
+
+  if (loading) {
+    return <TelegramReportSkeleton />
   }
 
   return (

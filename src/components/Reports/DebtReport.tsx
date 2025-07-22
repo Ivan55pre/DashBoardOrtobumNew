@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
+import ReportSkeleton from './ReportSkeleton'
 
 interface DebtReportData {
   id: string
@@ -322,16 +323,11 @@ const DebtReport: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="card p-6">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
-          <div className="space-y-3">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <ReportSkeleton
+        isMobile={isMobile}
+        columnCount={4}
+        filterCount={2}
+      />
     )
   }
 
