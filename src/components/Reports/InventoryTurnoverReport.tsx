@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
+import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 
 interface InventoryTurnoverData {
@@ -23,7 +23,6 @@ interface InventoryTurnoverData {
 }
 
 const InventoryTurnoverReport: React.FC = () => {
-  const { user } = useAuth()
   const [data, setData] = useState<InventoryTurnoverData[]>([])
   const [loading, setLoading] = useState(true)
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])

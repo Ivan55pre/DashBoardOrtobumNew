@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
-import { useUserOrganizations, Organization } from '../hooks/useUserOrganizations'
+import { useUserOrganizations } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
 //import { useTelegram } from '../contexts/TelegramContext'
 

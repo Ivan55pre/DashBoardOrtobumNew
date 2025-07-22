@@ -242,9 +242,39 @@ const TelegramDashboard: React.FC = () => {
   }
 
   const loadPlanFactData = async (organizationIds: string[]) => {
-    // This function would also be updated to fetch from multiple orgs and average the result.
-    // For brevity, we'll keep the demo data return.
-    return { execution: 71.9, change: -8.1 }
+    try {
+      const { data: reportMeta, error: metaError } = await supabase
+        .from('report_metadata')
+        .select('id')
+        .in('organization_id', organizationIds)
+        .eq('report_type', 'plan_fact')
+        .order('report_date', { ascending: false })
+
+      if (metaError) throw metaError
+      if (!reportMeta || reportMeta.length === 0) return { execution: 0, change: 0 }
+
+      const reportIds = reportMeta.map(r => r.id)
+
+      const { data, error } = await supabase
+        .from('plan_fact_reports_items')
+        .select('execution_percent')
+        .in('report_id', reportIds)
+        .eq('period_type', 'month')
+        .eq('is_total_row', true)
+
+      if (error) throw error
+
+      const values = (data || []).map(item => item.execution_percent || 0)
+      const execution = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0
+
+      return {
+        execution: execution,
+        change: -8.1 // Динамику пока оставляем демо
+      }
+    } catch (error) {
+      console.error('Error loading plan-fact data, using demo data.', error)
+      return { execution: 0, change: 0 }
+    }
   }
 
   const formatCurrency = (amount: number): string => {

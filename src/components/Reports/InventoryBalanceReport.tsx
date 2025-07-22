@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useUserOrganizations, Organization } from '../../hooks/useUserOrganizations'
+import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 
 interface InventoryBalanceData {
@@ -22,7 +22,6 @@ interface InventoryBalanceData {
 }
 
 const InventoryBalanceReport: React.FC = () => {
-  const { user } = useAuth()
   const [data, setData] = useState<InventoryBalanceData[]>([])
   const [loading, setLoading] = useState(true)
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
@@ -95,19 +94,6 @@ const InventoryBalanceReport: React.FC = () => {
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, reportDate])
-
-  const findParentName = (items: InventoryBalanceData[], parentId: string | null): string | null => {
-    if (!parentId) return null
-    let parentName: string | null = null
-    const find = (currentItems: InventoryBalanceData[]) => {
-      for (const item of currentItems) {
-        if (item.id === parentId) parentName = item.category_name
-        if (!parentName && item.children) find(item.children)
-      }
-    }
-    find(items)
-    return parentName
-  }
 
   const flattenHierarchy = (items: InventoryBalanceData[]): InventoryBalanceData[] => {
     const result: InventoryBalanceData[] = []
