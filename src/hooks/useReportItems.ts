@@ -74,12 +74,18 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
 
-          // Добавляем имя организации к каждой строке для консолидированного вида
-          const itemsWithOrg = (reportItems || []).map(item => {
-            const meta = reportMeta.find(m => m.id === (item as any).report_id);
-            return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' };
+          // Создаем карту для быстрого поиска имени организации по report_id.
+          // Это гораздо эффективнее, чем использовать .find() в цикле (O(N*M) -> O(N+M)).
+          const orgNameMap = new Map<string, string>();
+          reportMeta.forEach(meta => {
+            if (meta.id && (meta as any).organizations?.name) {
+              orgNameMap.set(meta.id, (meta as any).organizations.name);
+            }
           });
 
+          // Добавляем имя организации к каждой строке, используя созданную карту.
+          const itemsWithOrg = (reportItems || []).map(item => ({ ...item, organization_name: orgNameMap.get((item as any).report_id) || 'Unknown Org' }));
+          
           setData(itemsWithOrg as T[]);
         } else {
           setData(null); // Отчет не найден
