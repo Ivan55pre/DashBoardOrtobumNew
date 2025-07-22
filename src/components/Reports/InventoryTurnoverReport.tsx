@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 
