@@ -39,18 +39,29 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
       setData(null);
 
       try {
-        // 1. Получаем метаданные отчета
-        const { data: reportMeta, error: metaError } = await supabase
+        // 1. Получаем все метаданные отчетов до указанной даты, чтобы найти самую последнюю доступную.
+        const { data: allReportMeta, error: metaError } = await supabase
           .from('report_metadata')
-          .select('id, organization_id, organizations(name)')
+          .select('id, organization_id, report_date, organizations(name)')
           .in('organization_id', organizationIds)
           .eq('report_type', reportType)
-          .eq('report_date', reportDate);
+          .lte('report_date', reportDate);
 
         if (metaError) throw metaError;
 
-        if (reportMeta && reportMeta.length > 0) {
-          // 2. Если метаданные есть, получаем данные отчета
+        if (allReportMeta && allReportMeta.length > 0) {
+          // 2. На клиенте находим самую последнюю запись для каждой организации.
+          // Это позволяет показать отчет за вчера, если за сегодня данных еще нет.
+          const latestMetaMap = new Map<string, typeof allReportMeta[0]>();
+          allReportMeta.forEach(meta => {
+            const existing = latestMetaMap.get(meta.organization_id);
+            if (!existing || new Date(meta.report_date) > new Date(existing.report_date)) {
+              latestMetaMap.set(meta.organization_id, meta);
+            }
+          });
+          const reportMeta = Array.from(latestMetaMap.values());
+
+          // 3. Если метаданные есть, получаем данные отчета
           const reportIds = reportMeta.map(r => r.id);
           const tableName = reportTypeToTableMap[reportType];
           let query = supabase.from(tableName).select('*').in('report_id', reportIds);
