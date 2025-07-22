@@ -31,15 +31,6 @@ const CashBankReport: React.FC = () => {
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [availableAccounts, setAvailableAccounts] = useState<string[]>([])
 
-  // Helper function to generate UUID v4
-  const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0
-      const v = c == 'x' ? r : (r & 0x3 | 0x8)
-      return v.toString(16)
-    })
-  }
-
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
@@ -78,9 +69,8 @@ const CashBankReport: React.FC = () => {
     if (hasRealData) {
       itemsToProcess = reportItems
     } else {
-      if (reportError) console.error('Error loading report data:', reportError)
-      console.warn(`No cash_bank reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-      itemsToProcess = flattenHierarchy(getSampleData())
+      if (reportError) console.error('Error loading cash_bank report data:', reportError)
+      itemsToProcess = []
     }
 
     const accounts = [...new Set(itemsToProcess
@@ -108,161 +98,6 @@ const CashBankReport: React.FC = () => {
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount, reportDate])
-
-  const flattenHierarchy = (items: CashBankReportData[]): CashBankReportData[] => {
-    const result: CashBankReportData[] = []
-    
-    const flatten = (items: CashBankReportData[]) => {
-      items.forEach(item => {
-        result.push(item)
-        if (item.children && item.children.length > 0) {
-          flatten(item.children)
-        }
-      })
-    }
-    
-    flatten(items)
-    return result
-  }
-
-  const getSampleData = (organizationName: string = 'Маркова-Дорей Ю.В. ИП'): CashBankReportData[] => {
-    // Generate UUIDs for the sample data
-    const uuid1 = generateUUID()
-    const uuid2 = generateUUID()
-    const uuid3 = generateUUID()
-    const uuid4 = generateUUID()
-    const uuid5 = generateUUID()
-    const uuid6 = generateUUID()
-    const uuid7 = generateUUID()
-    const uuid8 = generateUUID()
-    const uuid9 = generateUUID()
-
-    return [
-      {
-        id: uuid1,
-        subconto: null,
-        account_name: 'Итого',
-        parent_id: null,
-        balance_start: 7413741,
-        income_amount: 0,
-        expense_amount: 0,
-        balance_current: 7413741,
-        account_type: 'total',
-        level: 0,
-        is_total_row: true,
-        children: [
-          {
-            id: uuid2,            
-            account_name: organizationName,
-            subconto: null,
-            parent_id: uuid1,
-            balance_start: 4717137,
-            income_amount: 0,
-            expense_amount: 0,
-            balance_current: 4717137,
-            account_type: 'organization',
-            level: 1,
-            is_total_row: false,
-            children: [
-              {
-                id: uuid3,                
-                account_name: 'Альфа-банк',
-                subconto: 'Основной',
-                parent_id: uuid2,
-                balance_start: 63882,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 63882,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid4,                
-                account_name: 'НБД',
-                subconto: 'Зарплатный',
-                parent_id: uuid2,
-                balance_start: 275308,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 275308,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid5,                
-                account_name: 'Сбербанк',
-                subconto: 'Основной',
-                parent_id: uuid2,
-                balance_start: 4248450,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 4248450,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              }
-            ]
-          },
-          {
-            id: uuid6,            
-            account_name: 'ООО "ОРТОБУМ"',
-            subconto: null,
-            parent_id: uuid1,
-            balance_start: 2696604,
-            income_amount: 0,
-            expense_amount: 0,
-            balance_current: 2696604,
-            account_type: 'organization',
-            level: 1,
-            is_total_row: false,
-            children: [
-              {
-                id: uuid7,                
-                account_name: 'Альфа-банк',
-                subconto: 'Основной',
-                parent_id: uuid6,
-                balance_start: 1767627,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 1767627,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid8,                
-                account_name: 'Сбербанк 8301',
-                subconto: 'Спецсчет',
-                parent_id: uuid6,
-                balance_start: 851443,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 851443,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid9,                
-                account_name: 'ЮникредитБанк',
-                subconto: 'Валютный',
-                parent_id: uuid6,
-                balance_start: 52275,
-                income_amount: 0,
-                expense_amount: 0,
-                balance_current: 52275,
-                account_type: 'bank',
-                level: 2,
-                is_total_row: false
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
 
   // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
   // Этот метод надежнее, чем построение на основе уровней (level).
@@ -577,7 +412,13 @@ const CashBankReport: React.FC = () => {
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {data.map((item) => renderMobileRow(item))}
+          {data.length > 0 ? (
+            data.map((item) => renderMobileRow(item))
+          ) : (
+            <div className="text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+              Нет данных для отображения.
+            </div>
+          )}
         </div>
 
         <div className="p-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700">
@@ -670,7 +511,15 @@ const CashBankReport: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {data.map((item) => renderDesktopRow(item))}
+            {data.length > 0 ? (
+              data.map((item) => renderDesktopRow(item))
+            ) : (
+              <tr>
+                <td colSpan={7} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
+                  Нет данных для отображения.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
