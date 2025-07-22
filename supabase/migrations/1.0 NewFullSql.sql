@@ -468,6 +468,9 @@ CREATE TABLE cash_bank_report_items (
 -- Добавляем поле для иерархии
 ALTER TABLE public.cash_bank_report_items
 ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.cash_bank_report_items(id) ON DELETE SET NULL;
+ALTER TABLE public.cash_bank_report_items
+ADD COLUMN IF NOT EXISTS account_id TEXT,
+ADD COLUMN IF NOT EXISTS parent_account_id TEXT;
 
 -- Function and trigger for cash bank report items timestamp
 create or replace function update_cash_bank_report_items_timestamp () returns trigger as $$
@@ -608,9 +611,9 @@ BEGIN
     DELETE FROM public.cash_bank_report_items WHERE report_id = v_report_id;
 
     -- Шаг 4: Вставить новые строки отчета, обрабатывая иерархию.
-    -- Создаем временную таблицу для сопоставления имен счетов с их новыми UUID.
+    -- Создаем временную таблицу для сопоставления ID счетов из 1С с их новыми UUID в нашей БД.
     CREATE TEMP TABLE temp_account_map (
-        account_name TEXT PRIMARY KEY,
+        account_id TEXT PRIMARY KEY,
         item_id UUID NOT NULL
     ) ON COMMIT DROP;
 
@@ -620,11 +623,9 @@ BEGIN
         INSERT INTO public.cash_bank_report_items (
             report_id, account_name, subconto, balance_start, 
             income_amount, expense_amount, balance_current, 
-            account_type, level, currency, is_total_row, parent_id
+            account_type, level, currency, is_total_row, 
+            account_id, parent_account_id, parent_id
         )
-            -- Используем английские ключи, которые должен готовить n8n
-            -- ИСПРАВЛЕНО: Используем русские ключи напрямую из исходного JSON.
-            -- Это делает функцию устойчивой, даже если n8n не преобразует поля.
         VALUES (
             v_report_id,
             item->>'account_name',
@@ -637,25 +638,31 @@ BEGIN
             (item->>'level')::INTEGER,
             item->>'currency',
             (item->>'is_total_row')::BOOLEAN,
-            NULL -- parent_id изначально NULL
+            item->>'account_id', -- Новый account_id из 1С
+            item->>'parent_account_id', -- Новый parent_account_id из 1С
+            NULL -- parent_id (FK) изначально NULL
         )
         RETURNING id INTO v_item_id;
-        -- Добавляем запись в карту. Убедитесь, что account_name уникален для каждой строки в JSON.
-        INSERT INTO temp_account_map (account_name, item_id) 
-        VALUES (item->>'account_name', v_item_id)
-        ON CONFLICT (account_name) DO NOTHING; -- Игнорируем дубликаты, если они есть
+        -- Добавляем запись в карту, если account_id предоставлен.
+        IF item->>'account_id' IS NOT NULL THEN
+            INSERT INTO temp_account_map (account_id, item_id) 
+            VALUES (item->>'account_id', v_item_id)
+            ON CONFLICT (account_id) DO NOTHING; -- Игнорируем дубликаты, если они есть
+        END IF;
     END LOOP;
 
-    -- Второй проход: обновляем parent_id, используя карту.
-    -- Предполагается, что в JSON есть поле 'parent_account_name'.
+    -- Второй проход: обновляем parent_id (FK), используя карту и parent_account_id.
     FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
     LOOP
-        IF item->>'parent_account_name' IS NOT NULL AND item->>'parent_account_name' != '' THEN
-            SELECT item_id INTO v_parent_id FROM temp_account_map WHERE account_name = item->>'parent_account_name';
+        -- Обновляем только если есть parent_account_id
+        IF item->>'parent_account_id' IS NOT NULL AND item->>'parent_account_id' != '' THEN
+            -- Находим UUID родителя в нашей карте
+            SELECT item_id INTO v_parent_id FROM temp_account_map WHERE account_id = item->>'parent_account_id';
+            
             IF v_parent_id IS NOT NULL THEN
-                -- Находим строку по уникальному имени счета в рамках этого отчета и обновляем ее
+                -- Находим дочернюю строку по ее account_id и обновляем ее parent_id (FK)
                 UPDATE public.cash_bank_report_items SET parent_id = v_parent_id
-                WHERE report_id = v_report_id AND account_name = item->>'account_name';
+                WHERE report_id = v_report_id AND account_id = item->>'account_id';
             END IF;
         END IF;
     END LOOP;

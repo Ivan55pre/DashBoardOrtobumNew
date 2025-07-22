@@ -6,9 +6,11 @@ import ReportSkeleton from './ReportSkeleton'
 
 interface CashBankReportData {
   id: string
+  account_id: string | null
+  parent_account_id: string | null
   subconto: string | null
   account_name: string | null
-  parent_id: string | null
+  parent_id: string | null // FK на id в этой же таблице
   balance_start: number
   income_amount: number
   expense_amount: number
@@ -114,6 +116,8 @@ const CashBankReport: React.FC = () => {
       const consolidatedTotal: CashBankReportData = {
         id: 'consolidated-total',
         account_name: 'Консолидированный итог',
+        account_id: null,
+        parent_account_id: null,
         parent_id: null,
         subconto: null,
         balance_start: 0,
