@@ -39,18 +39,39 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
       setData(null);
 
       try {
+// ---
+        // восстанавливаем этот фпагмент если // меняю ReportMeta на allReportMeta - чтобы далее работало
+        // конкретная дата отчета, если такой нет - ((
+          // 1. Получаем метаданные отчета
+        const { data: allReportMeta, error: metaError } = await supabase
+          .from('report_metadata')
+          .select('id, organization_id, organizations(name)')
+          .in('organization_id', organizationIds)
+          .eq('report_type', reportType)
+          .eq('report_date', reportDate); // знак =
+
+        if (metaError) throw metaError;
+
+        if (allReportMeta && allReportMeta.length > 0) {
+          // 2. Если метаданные есть, получаем данные отчета
+// ---
+
+// ---
+/* // восстанавливаем этот фпагмент если
         // 1. Получаем все метаданные отчетов до указанной даты, чтобы найти самую последнюю доступную.
         const { data: allReportMeta, error: metaError } = await supabase
           .from('report_metadata')
           .select('id, organization_id, report_date, organizations(name)')
           .in('organization_id', organizationIds)
           .eq('report_type', reportType)
-          .lte('report_date', reportDate);
+          .lte('report_date', reportDate); // знак <=
 
         if (metaError) throw metaError;
 
         if (allReportMeta && allReportMeta.length > 0) {
-          // 2. На клиенте находим самую последнюю запись для каждой организации.
+  */
+ // ---
+        // 2. На клиенте находим самую последнюю запись для каждой организации.
           // Это позволяет показать отчет за вчера, если за сегодня данных еще нет.
           const latestMetaMap = new Map<string, typeof allReportMeta[0]>();
           allReportMeta.forEach(meta => {
