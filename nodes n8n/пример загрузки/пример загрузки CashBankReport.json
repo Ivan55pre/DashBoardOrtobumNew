@@ -1,0 +1,41 @@
+[
+  {
+    "account_name": "Сбербанк",
+    "subconto": null,
+    "balance_start": 367389.95,
+    "income_amount": 0.00,
+    "expense_amount": 354068.00,
+    "balance_current": 13321.95,
+    "account_type": "bank",
+    "level": 2,
+    "currency": "RUB",
+    "is_total_row": false,
+    "parent_account_name": "Имя Вашей Организации"
+  },
+  {
+    "account_name": "Сбербанк - РКО",
+    "subconto": "3.10.1.Расчетно-кассовоеобслуживание",
+    "balance_start": 0.00,
+    "income_amount": 0.00,
+    "expense_amount": 8.00,
+    "balance_current": 0.00,
+    "account_type": "bank",
+    "level": 3,
+    "currency": "RUB",
+    "is_total_row": false,
+    "parent_account_name": "Сбербанк"
+  },
+  {
+    "account_name": "Сбербанк - Оплата за товары",
+    "subconto": "2.1.1.Оплатапофактузатоварыиосновныематериалы",
+    "balance_start": 0.00,
+    "income_amount": 0.00,
+    "expense_amount": 354060.00,
+    "balance_current": 0.00,
+    "account_type": "bank",
+    "level": 3,
+    "currency": "RUB",
+    "is_total_row": false,
+    "parent_account_name": "Сбербанк"
+  }
+]

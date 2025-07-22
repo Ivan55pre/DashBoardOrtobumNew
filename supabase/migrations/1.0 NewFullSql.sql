@@ -622,22 +622,24 @@ BEGIN
             income_amount, expense_amount, balance_current, 
             account_type, level, currency, is_total_row, parent_id
         )
+            -- Используем английские ключи, которые должен готовить n8n
+            -- ИСПРАВЛЕНО: Используем русские ключи напрямую из исходного JSON.
+            -- Это делает функцию устойчивой, даже если n8n не преобразует поля.
         VALUES (
-            v_report_id, 
-            item->>'account_name', 
-            item->>'subconto', 
-            (item->>'balance_start')::DECIMAL, 
-            (item->>'income_amount')::DECIMAL, 
-            (item->>'expense_amount')::DECIMAL, 
-            (item->>'balance_current')::DECIMAL, 
-            item->>'account_type', 
-            (item->>'level')::INTEGER, 
-            item->>'currency', 
+            v_report_id,
+            item->>'account_name',
+            item->>'subconto',
+            (COALESCE(item->>'balance_start', item->>'СуммаНачальныйОстаток'))::DECIMAL,
+            (COALESCE(item->>'income_amount', item->>'СуммаОборотДт'))::DECIMAL,
+            (COALESCE(item->>'expense_amount', item->>'СуммаОборотКт'))::DECIMAL,
+            (COALESCE(item->>'balance_current', item->>'СуммаКонечныйОстаток'))::DECIMAL,
+            item->>'account_type',
+            (item->>'level')::INTEGER,
+            item->>'currency',
             (item->>'is_total_row')::BOOLEAN,
             NULL -- parent_id изначально NULL
         )
         RETURNING id INTO v_item_id;
-
         -- Добавляем запись в карту. Убедитесь, что account_name уникален для каждой строки в JSON.
         INSERT INTO temp_account_map (account_name, item_id) 
         VALUES (item->>'account_name', v_item_id)

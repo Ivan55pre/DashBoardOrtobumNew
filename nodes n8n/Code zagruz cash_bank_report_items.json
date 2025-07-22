@@ -42,7 +42,8 @@ const output = Object.entries(groupedItems).map(([organization, items]) => {
       account_type: accountType,
       level: parseInt(item.level || item.Уровень || 1, 10),
       currency: item.currency || 'RUB',
-      is_total_row: Boolean(item.is_total_row)
+      is_total_row: Boolean(item.is_total_row),
+      parent_account_name: item.parent_account_name || null // <--- ДОБАВЬТЕ ЭТУ СТРОКУ
     };
   });
 
