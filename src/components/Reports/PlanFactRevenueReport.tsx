@@ -28,15 +28,6 @@ const PlanFactRevenueReport: React.FC = () => {
   
   const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
-  // Helper function to generate UUID v4
-  const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0
-      const v = c == 'x' ? r : (r & 0x3 | 0x8)
-      return v.toString(16)
-    })
-  }
-
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
@@ -75,9 +66,8 @@ const PlanFactRevenueReport: React.FC = () => {
     if (hasRealData) {
       itemsToProcess = reportItems
     } else {
-      if (reportError) console.error('Error loading report data:', reportError)
-      console.warn(`No plan-fact reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-      itemsToProcess = flattenHierarchy(getSampleData())
+      if (reportError) console.error('Error loading plan-fact report data:', reportError)
+      itemsToProcess = []
     }
 
     const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
@@ -92,206 +82,6 @@ const PlanFactRevenueReport: React.FC = () => {
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, reportDate])
-
-  const flattenHierarchy = (items: PlanFactRevenueData[]): PlanFactRevenueData[] => {
-    const result: PlanFactRevenueData[] = []
-    
-    const flatten = (items: PlanFactRevenueData[]) => {
-      items.forEach(item => {
-        result.push(item)
-        if (item.children && item.children.length > 0) {
-          flatten(item.children)
-        }
-      })
-    }
-    
-    flatten(items)
-    return result
-  }
-
-  const getSampleData = (): PlanFactRevenueData[] => {
-    // Generate UUIDs for the sample data
-    const uuid1 = generateUUID()
-    const uuid2 = generateUUID()
-    const uuid3 = generateUUID()
-    const uuid4 = generateUUID()
-    const uuid5 = generateUUID()
-    const uuid6 = generateUUID()
-    const uuid7 = generateUUID()
-    const uuid8 = generateUUID()
-    const uuid9 = generateUUID()
-    const uuid26 = generateUUID()
-    const uuid27 = generateUUID()
-    const uuid28 = generateUUID()
-    const uuid29 = generateUUID()
-
-    return [
-      {
-        id: uuid1,
-        category_name: 'Итого с начала месяца',
-        parent_id: null,
-        plan_amount: 50785943,
-        fact_amount: 36501653,
-        execution_percent: 71.9,
-        period_type: 'month',
-        level: 0,
-        is_total_row: true,
-        is_expandable: true,
-        children: [
-          {
-            id: uuid2,
-            category_name: 'Маркова-Дорей Ю.В. ИП',
-            parent_id: uuid1,
-            plan_amount: 15158821,
-            fact_amount: 12654350,
-            execution_percent: 83.5,
-            period_type: 'month',
-            level: 1,
-            is_total_row: false,
-            is_expandable: true,
-            children: [
-              {
-                id: uuid3,
-                category_name: 'С начала месяца',
-                parent_id: uuid2,
-                plan_amount: 15158821,
-                fact_amount: 12654350,
-                execution_percent: 83.5,
-                period_type: 'month',
-                level: 2,
-                is_total_row: false,
-                is_expandable: true,
-                children: [
-                  {
-                    id: uuid4,
-                    category_name: 'Новый интернет магазин',
-                    parent_id: uuid3,
-                    plan_amount: 748123,
-                    fact_amount: 1066979,
-                    execution_percent: 142.6,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  },
-                  {
-                    id: uuid5,
-                    category_name: 'ОЦ 1, Н.Новгород, Рождественская,43',
-                    parent_id: uuid3,
-                    plan_amount: 1504688,
-                    fact_amount: 1175986,
-                    execution_percent: 78.2,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  },
-                  {
-                    id: uuid6,
-                    category_name: 'ОЦ 11, Н.Новгород, Бекетова,9',
-                    parent_id: uuid3,
-                    plan_amount: 1124050,
-                    fact_amount: 963251,
-                    execution_percent: 85.7,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  },
-                  {
-                    id: uuid7,
-                    category_name: 'ОЦ 12, Н.Новгород, Страж Революции,6',
-                    parent_id: uuid3,
-                    plan_amount: 485307,
-                    fact_amount: 469988,
-                    execution_percent: 96.8,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  },
-                  {
-                    id: uuid8,
-                    category_name: 'ОЦ 13, Городец, Новая,8',
-                    parent_id: uuid3,
-                    plan_amount: 277529,
-                    fact_amount: 236651,
-                    execution_percent: 85.3,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  },
-                  {
-                    id: uuid9,
-                    category_name: 'ОЦ 14, Дзержинск, Мира,40',
-                    parent_id: uuid3,
-                    plan_amount: 895879,
-                    fact_amount: 705694,
-                    execution_percent: 78.8,
-                    period_type: 'month',
-                    level: 3,
-                    is_total_row: false,
-                    is_expandable: false
-                  }
-                ]
-              },
-              {
-                id: uuid26,
-                category_name: 'С начала года',
-                parent_id: uuid2,
-                plan_amount: 15158821,
-                fact_amount: 12654350,
-                execution_percent: 83.5,
-                period_type: 'year',
-                level: 2,
-                is_total_row: false,
-                is_expandable: false
-              }
-            ]
-          },
-          {
-            id: uuid27,
-            category_name: 'ООО "ОРТОБУМ"',
-            parent_id: uuid1,
-            plan_amount: 18685996,
-            fact_amount: 11549325,
-            execution_percent: 61.8,
-            period_type: 'month',
-            level: 1,
-            is_total_row: false,
-            is_expandable: true,
-            children: [
-              {
-                id: uuid28,
-                category_name: 'С начала месяца',
-                parent_id: uuid27,
-                plan_amount: 19682851,
-                fact_amount: 13306246,
-                execution_percent: 67.6,
-                period_type: 'month',
-                level: 2,
-                is_total_row: false,
-                is_expandable: false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: uuid29,
-        category_name: 'Итого с начала года',
-        parent_id: null,
-        plan_amount: 50785943,
-        fact_amount: 36501653,
-        execution_percent: 71.9,
-        period_type: 'year',
-        level: 0,
-        is_total_row: true,
-        is_expandable: false
-      }
-    ]
-  }
 
   // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
   // Этот метод надежнее, чем построение на основе уровней (level).
@@ -575,7 +365,13 @@ const PlanFactRevenueReport: React.FC = () => {
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {data.map((item) => renderMobileRow(item))}
+          {data.length > 0 ? (
+            data.map((item) => renderMobileRow(item))
+          ) : (
+            <div className="text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+              Нет данных для отображения.
+            </div>
+          )}
         </div>
 
         <div className="p-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700">
@@ -648,7 +444,15 @@ const PlanFactRevenueReport: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {data.map((item) => renderDesktopRow(item))}
+            {data.length > 0 ? (
+              data.map((item) => renderDesktopRow(item))
+            ) : (
+              <tr>
+                <td colSpan={4} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
+                  Нет данных для отображения.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

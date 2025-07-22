@@ -29,15 +29,6 @@ const InventoryBalanceReport: React.FC = () => {
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
 
-  // Helper function to generate UUID v4
-  const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0
-      const v = c == 'x' ? r : (r & 0x3 | 0x8)
-      return v.toString(16)
-    })
-  }
-
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
@@ -76,9 +67,8 @@ const InventoryBalanceReport: React.FC = () => {
     if (hasRealData) {
       itemsToProcess = reportItems
     } else {
-      if (reportError) console.error('Error loading report data:', reportError)
-      console.warn(`No inventory balance reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-      itemsToProcess = flattenHierarchy(getSampleData())
+      if (reportError) console.error('Error loading inventory balance report data:', reportError)
+      itemsToProcess = []
     }
 
     const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
@@ -93,177 +83,6 @@ const InventoryBalanceReport: React.FC = () => {
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, reportDate])
-
-  const flattenHierarchy = (items: InventoryBalanceData[]): InventoryBalanceData[] => {
-    const result: InventoryBalanceData[] = []
-    
-    const flatten = (items: InventoryBalanceData[]) => {
-      items.forEach(item => {
-        result.push(item)
-        if (item.children && item.children.length > 0) {
-          flatten(item.children)
-        }
-      })
-    }
-    
-    flatten(items)
-    return result
-  }
-
-  const getSampleData = (organizationName: string = 'Маркова-Дорей Ю.В. ИП'): InventoryBalanceData[] => {
-    // Generate UUIDs for the sample data
-    const uuid1 = generateUUID()
-    const uuid2 = generateUUID()
-    const uuid3 = generateUUID()
-    const uuid4 = generateUUID()
-    const uuid5 = generateUUID()
-    const uuid6 = generateUUID()
-    const uuid7 = generateUUID()
-    const uuid8 = generateUUID()
-    const uuid9 = generateUUID()
-    const uuid10 = generateUUID()
-
-    return [
-      {
-        id: uuid1,
-        category_name: 'Итого',
-        parent_category_id: null,
-        quantity_pairs: 163954,
-        balance_rub: 197635082,
-        dynamics_start_month_rub: -11034533,
-        dynamics_start_month_percent: -5.29,
-        dynamics_start_year_rub: 27880832,
-        dynamics_start_year_percent: 16.42,
-        level: 0,
-        is_total_row: true,
-        children: [
-          {
-            id: uuid2,
-            category_name: organizationName,
-            parent_category_id: uuid1,
-            quantity_pairs: 56817,
-            balance_rub: 49112903,
-            dynamics_start_month_rub: 644672,
-            dynamics_start_month_percent: 1.33,
-            dynamics_start_year_rub: -185373,
-            dynamics_start_year_percent: -0.38,
-            level: 1,
-            is_total_row: false,
-            children: [
-              {
-                id: uuid3,
-                category_name: 'Материалы',
-                parent_category_id: uuid2,
-                quantity_pairs: 10860,
-                balance_rub: 412966,
-                dynamics_start_month_rub: -22406,
-                dynamics_start_month_percent: -5.15,
-                dynamics_start_year_rub: 40547,
-                dynamics_start_year_percent: 10.89,
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid4,
-                category_name: 'Прочие материалы',
-                parent_category_id: uuid2,
-                quantity_pairs: 6500,
-                balance_rub: 166018,
-                dynamics_start_month_rub: 25868,
-                dynamics_start_month_percent: 18.46,
-                dynamics_start_year_rub: 31503,
-                dynamics_start_year_percent: 23.42,
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid5,
-                category_name: 'Товары в розничной торговле (по покупной стоимости)',
-                parent_category_id: uuid2,
-                quantity_pairs: 45769,
-                balance_rub: 47996251,
-                dynamics_start_month_rub: 168677,
-                dynamics_start_month_percent: 0.35,
-                dynamics_start_year_rub: -929606,
-                dynamics_start_year_percent: -1.90,
-                level: 2,
-                is_total_row: false
-              }
-            ]
-          },
-          {
-            id: uuid6,
-            category_name: 'ООО "ОРТОБУМ"',
-            parent_category_id: uuid1,
-            quantity_pairs: 107137,
-            balance_rub: 148522179,
-            dynamics_start_month_rub: -11679205,
-            dynamics_start_month_percent: -7.29,
-            dynamics_start_year_rub: 28066205,
-            dynamics_start_year_percent: 23.30,
-            level: 1,
-            is_total_row: false,
-            children: [
-              {
-                id: uuid7,
-                category_name: 'Материалы',
-                parent_category_id: uuid6,
-                quantity_pairs: 3142,
-                balance_rub: 1203104,
-                dynamics_start_month_rub: -39922,
-                dynamics_start_month_percent: -3.21,
-                dynamics_start_year_rub: 91665,
-                dynamics_start_year_percent: 8.19,
-                level: 2,
-                is_total_row: false
-              },
-              {
-                id: uuid8,
-                category_name: 'Товары на складах',
-                parent_category_id: uuid6,
-                quantity_pairs: 58327,
-                balance_rub: 58719816,
-                dynamics_start_month_rub: -9814594,
-                dynamics_start_month_percent: -14.32,
-                dynamics_start_year_rub: 8426396,
-                dynamics_start_year_percent: 16.75,
-                level: 2,
-                is_total_row: false,
-                children: [
-                  {
-                    id: uuid9,
-                    category_name: 'Комплектующие',
-                    parent_category_id: uuid8,
-                    quantity_pairs: 1,
-                    balance_rub: 282,
-                    dynamics_start_month_rub: 0,
-                    dynamics_start_month_percent: 0,
-                    dynamics_start_year_rub: 0,
-                    dynamics_start_year_percent: 0,
-                    level: 3,
-                    is_total_row: false
-                  },
-                  {
-                    id: uuid10,
-                    category_name: 'Материалы',
-                    parent_category_id: uuid8,
-                    quantity_pairs: 12101,
-                    balance_rub: 249,
-                    dynamics_start_month_rub: 0,
-                    dynamics_start_month_percent: 0,
-                    dynamics_start_year_rub: 0,
-                    dynamics_start_year_percent: 0,
-                    level: 3,
-                    is_total_row: false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
 
   const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): InventoryBalanceData[] => {
     const map = new Map()
@@ -581,7 +400,13 @@ const InventoryBalanceReport: React.FC = () => {
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {data.map((item) => renderMobileRow(item))}
+          {data.length > 0 ? (
+            data.map((item) => renderMobileRow(item))
+          ) : (
+            <div className="text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+              Нет данных для отображения.
+            </div>
+          )}
         </div>
 
         <div className="p-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700">
@@ -663,7 +488,15 @@ const InventoryBalanceReport: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {data.map((item) => renderDesktopRow(item))}
+            {data.length > 0 ? (
+              data.map((item) => renderDesktopRow(item))
+            ) : (
+              <tr>
+                <td colSpan={7} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
+                  Нет данных для отображения.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

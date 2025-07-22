@@ -30,15 +30,6 @@ const DebtReport: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<string>('')
   const [availableCustomers, setAvailableCustomers] = useState<string[]>([])
 
-  // Helper function to generate UUID v4
-  const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0
-      const v = c == 'x' ? r : (r & 0x3 | 0x8)
-      return v.toString(16)
-    })
-  }
-
   const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
 
   useEffect(() => {
@@ -77,9 +68,8 @@ const DebtReport: React.FC = () => {
     if (hasRealData) {
       itemsToProcess = reportItems
     } else {
-      if (reportError) console.error('Error loading report data:', reportError)
-      console.warn(`No debt reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-      itemsToProcess = flattenHierarchy(getSampleData())
+      if (reportError) console.error('Error loading debt report data:', reportError)
+      itemsToProcess = []
     }
 
     const customers = [...new Set(itemsToProcess
@@ -107,169 +97,6 @@ const DebtReport: React.FC = () => {
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedCustomer, reportDate])
-
-  const flattenHierarchy = (items: DebtReportData[]): DebtReportData[] => {
-    const result: DebtReportData[] = []
-    
-    const flatten = (items: DebtReportData[]) => {
-      items.forEach(item => {
-        result.push(item)
-        if (item.children && item.children.length > 0) {
-          flatten(item.children)
-        }
-      })
-    }
-    
-    flatten(items)
-    return result
-  }
-
-  const getSampleData = (): DebtReportData[] => {
-    // Generate UUIDs for the sample data
-    const uuid1 = generateUUID()
-    const uuid2 = generateUUID()
-    const uuid3 = generateUUID()
-    const uuid4 = generateUUID()
-    const uuid5 = generateUUID()
-    const uuid6 = generateUUID()
-    const uuid7 = generateUUID()
-    const uuid8 = generateUUID()
-    const uuid9 = generateUUID()
-    const uuid10 = generateUUID()
-
-    return [
-      {
-        id: uuid1,
-        client_name: 'Итого',
-        parent_client_id: null,
-        debt_amount: 119919250,
-        overdue_amount: 4738064,
-        credit_amount: 22765169,
-        organization_type: 'total',
-        level: 0,
-        is_total_row: true,
-        is_group_row: false,
-        children: [
-          {
-            id: uuid2,
-            client_name: 'Маркова-Дорей Ю.В. ИП',
-            parent_client_id: uuid1,
-            debt_amount: 4703875,
-            overdue_amount: 0,
-            credit_amount: 12601353,
-            organization_type: 'contractor',
-            level: 1,
-            is_total_row: false,
-            is_group_row: false,
-            children: [
-              {
-                id: uuid3,
-                client_name: 'ПОКУПАТЕЛИ (сч. 62)',
-                parent_client_id: uuid2,
-                debt_amount: 1788890,
-                overdue_amount: 0,
-                credit_amount: 1047299,
-                organization_type: 'buyer',
-                level: 2,
-                is_total_row: false,
-                is_group_row: false,
-                children: [
-                  {
-                    id: uuid4,
-                    client_name: 'Физическое лицо',
-                    parent_client_id: uuid3,
-                    debt_amount: 1403000,
-                    overdue_amount: 0,
-                    credit_amount: 0,
-                    organization_type: 'buyer',
-                    level: 3,
-                    is_total_row: false,
-                    is_group_row: false
-                  },
-                  {
-                    id: uuid5,
-                    client_name: 'ЦПО ООО',
-                    parent_client_id: uuid3,
-                    debt_amount: 267650,
-                    overdue_amount: 0,
-                    credit_amount: 0,
-                    organization_type: 'buyer',
-                    level: 3,
-                    is_total_row: false,
-                    is_group_row: false
-                  }
-                ]
-              },
-              {
-                id: uuid6,
-                client_name: 'ПОСТАВЩИКИ (сч. 60)',
-                parent_client_id: uuid2,
-                debt_amount: 2990937,
-                overdue_amount: 0,
-                credit_amount: 10685669,
-                organization_type: 'supplier',
-                level: 2,
-                is_total_row: false,
-                is_group_row: false,
-                children: [
-                  {
-                    id: uuid7,
-                    client_name: 'Сатурн ООО Аренда',
-                    parent_client_id: uuid6,
-                    debt_amount: 372240,
-                    overdue_amount: 0,
-                    credit_amount: 0,
-                    organization_type: 'supplier',
-                    level: 3,
-                    is_total_row: false,
-                    is_group_row: false
-                  },
-                  {
-                    id: uuid8,
-                    client_name: 'ИНВЕСТ НЕДВИЖИМОСТЬ ООО',
-                    parent_client_id: uuid6,
-                    debt_amount: 224624,
-                    overdue_amount: 0,
-                    credit_amount: 0,
-                    organization_type: 'supplier',
-                    level: 3,
-                    is_total_row: false,
-                    is_group_row: false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            id: uuid9,
-            client_name: 'ООО "ОРТОБУМ"',
-            parent_client_id: uuid1,
-            debt_amount: 115233221,
-            overdue_amount: 4738064,
-            credit_amount: 10181661,
-            organization_type: 'contractor',
-            level: 1,
-            is_total_row: false,
-            is_group_row: false,
-            children: [
-              {
-                id: uuid10,
-                client_name: 'ПОКУПАТЕЛИ (сч. 62)',
-                parent_client_id: uuid9,
-                debt_amount: 27639598,
-                overdue_amount: 4738064,
-                credit_amount: 8787566,
-                organization_type: 'buyer',
-                level: 2,
-                is_total_row: false,
-                is_group_row: false
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
 
   const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): DebtReportData[] => {
     const map = new Map()
@@ -563,7 +390,13 @@ const DebtReport: React.FC = () => {
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {data.map((item) => renderMobileRow(item))}
+          {data.length > 0 ? (
+            data.map((item) => renderMobileRow(item))
+          ) : (
+            <div className="text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+              Нет данных для отображения.
+            </div>
+          )}
         </div>
 
         <div className="p-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700">
@@ -648,7 +481,15 @@ const DebtReport: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {data.map((item) => renderDesktopRow(item))}
+            {data.length > 0 ? (
+              data.map((item) => renderDesktopRow(item))
+            ) : (
+              <tr>
+                <td colSpan={4} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
+                  Нет данных для отображения.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

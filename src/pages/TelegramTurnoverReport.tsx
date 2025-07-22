@@ -30,14 +30,6 @@ const TelegramTurnoverReport: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeOrganizationName, setActiveOrganizationName] = useState<string | null>(null)
 
-  const generateUUID = (): string => { // Helper function to generate UUID v4
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0
-      const v = c == 'x' ? r : (r & 0x3 | 0x8)
-      return v.toString(16)
-    })
-  }
-
   const { organizations, isLoading: isLoadingOrgs, error: orgsError } = useUserOrganizations()
 
   const targetOrgIds = useMemo(() => {
@@ -60,26 +52,21 @@ const TelegramTurnoverReport: React.FC = () => {
   useEffect(() => {
     if (loading) return
 
-    // Case 1: Error loading organizations. Show error and sample data.
     if (orgsError) {
       console.error('Error loading organizations:', orgsError)
-      const sample = flattenHierarchy(getSampleData())
-      setData(buildHierarchy(sample, false))
-      setActiveOrganizationName('Ошибка (демо-данные)')
-      setExpandedRows(new Set(sample.filter(i => i.level <= 2).map(i => i.id)))
+      setData([])
+      setActiveOrganizationName('Ошибка загрузки организаций')
       return
     }
 
-    // Case 2: No organizations for the user. Show empty state.
     if (organizations && organizations.length === 0) {
       setData([])
-      setActiveOrganizationName(null) // Or "Нет организаций"
+      setActiveOrganizationName('Нет доступных организаций')
       return
     }
 
-    // Case 3: We have organizations, now check for report data.
     const hasRealData = reportItems && reportItems.length > 0 && !reportError
-    let itemsToProcess: InventoryTurnoverData[]
+    let itemsToProcess: InventoryTurnoverData[] = []
     const isConsolidatedView = (organizations?.length ?? 0) > 1
 
     if (hasRealData) {
@@ -87,199 +74,28 @@ const TelegramTurnoverReport: React.FC = () => {
       if (isConsolidatedView) {
         setActiveOrganizationName('Все организации')
       } else if (organizations?.length === 1) {
-        setActiveOrganizationName(organizations[0].name)
+        setActiveOrganizationName(organizations[0].name) // Set the single org name
       }
     } else {
-      // No real data found, or there was an error fetching it. Use sample data.
-      if (reportError) console.error('Error loading report data:', reportError)
-      console.warn(`No turnover reports found for selected orgs on ${reportDate}. Falling back to sample data.`)
-      itemsToProcess = flattenHierarchy(getSampleData())
-      setActiveOrganizationName('Демо-данные')
+      if (reportError) {
+        console.error('Error loading report data:', reportError)
+        setActiveOrganizationName('Ошибка загрузки отчета')
+      } else {
+        // Set active org name even if there's no data, for context
+        setActiveOrganizationName(isConsolidatedView ? 'Все организации' : organizations?.[0]?.name || 'Нет данных')
+      }
+      // itemsToProcess is already an empty array, resulting in an empty report
     }
 
     const hierarchyData = buildHierarchy(itemsToProcess, isConsolidatedView)
     setData(hierarchyData)
-
+    
     const initialExpanded = new Set<string>()
     itemsToProcess.forEach(item => {
       if (item.level <= 2) initialExpanded.add(item.id)
     })
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, orgsError, reportDate])
-
-  const flattenHierarchy = (items: InventoryTurnoverData[]): InventoryTurnoverData[] => {
-    const result: InventoryTurnoverData[] = []
-    
-    const flatten = (items: InventoryTurnoverData[]) => {
-      items.forEach(item => {
-        result.push(item)
-        if (item.children && item.children.length > 0) {
-          flatten(item.children)
-        }
-      })
-    }
-    
-    flatten(items)
-    return result
-  }
-
-  const getSampleData = (organizationName: string = 'ООО "ОРТОБУМ"'): InventoryTurnoverData[] => {
-    // Generate UUIDs for the sample data
-    const uuid1 = generateUUID()
-    const uuid2 = generateUUID()
-    const uuid3 = generateUUID()
-    const uuid4 = generateUUID()
-    const uuid5 = generateUUID()
-    //const _uuid6 = generateUUID()
-    //const _uuid7 = generateUUID()
-    //const _uuid8 = generateUUID()
-    //const _uuid9 = generateUUID()
-    //const _uuid10 = generateUUID()
-    //const _uuid11 = generateUUID()
-    const uuid12 = generateUUID()
-    const uuid13 = generateUUID()
-    const uuid14 = generateUUID()
-    const uuid15 = generateUUID()
-
-    return [
-      {
-        id: uuid1,
-        category_name: 'Итого',
-        parent_category_id: null,
-        quantity_pairs: 278235531,
-        balance_rub: 31917714,
-        dynamics_start_month_rub: 31917714,
-        dynamics_start_month_percent: 13.0,
-        dynamics_start_year_rub: 31917714,
-        dynamics_start_year_percent: 13.0,
-        turnover_days: 96,
-        level: 0,
-        is_total_row: true,
-        children: [
-          {
-            id: uuid2,
-            category_name: organizationName,
-            parent_category_id: uuid1,
-            quantity_pairs: 154455809,
-            balance_rub: 29409249,
-            dynamics_start_month_rub: 29409249,
-            dynamics_start_month_percent: 23.5,
-            dynamics_start_year_rub: 29409249,
-            dynamics_start_year_percent: 23.5,
-            turnover_days: 198,
-            level: 1,
-            is_total_row: false,
-            children: [
-              {
-                id: uuid3,
-                category_name: 'Обувь на собственных складах',
-                parent_category_id: uuid2,
-                quantity_pairs: 42645,
-                balance_rub: 22871516,
-                dynamics_start_month_rub: 22871516,
-                dynamics_start_month_percent: 47.6,
-                dynamics_start_year_rub: 22871516,
-                dynamics_start_year_percent: 47.6,
-                turnover_days: 536,
-                level: 2,
-                is_total_row: false,
-                children: [
-                  {
-                    id: uuid4,
-                    category_name: 'Ортопедическая и комфортная обувь, Ортопедическая обувь взрослая',
-                    parent_category_id: uuid3,
-                    quantity_pairs: 3793,
-                    balance_rub: 5193095,
-                    dynamics_start_month_rub: -336938,
-                    dynamics_start_month_percent: -6.1,
-                    dynamics_start_year_rub: -336938,
-                    dynamics_start_year_percent: -6.1,
-                    turnover_days: 0,
-                    level: 3,
-                    is_total_row: false,
-                    children: [
-                      {
-                        id: uuid5,
-                        category_name: 'Ботинки женские',
-                        parent_category_id: uuid4,
-                        quantity_pairs: 416,
-                        balance_rub: 1015442,
-                        dynamics_start_month_rub: -44429,
-                        dynamics_start_month_percent: -4.2,
-                        dynamics_start_year_rub: -44429,
-                        dynamics_start_year_percent: -4.2,
-                        turnover_days: 0,
-                        level: 4,
-                        is_total_row: false
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                id: uuid12,
-                category_name: 'Обувь на складах комиссионеров',
-                parent_category_id: uuid2,
-                quantity_pairs: 40521,
-                balance_rub: 69833043,
-                dynamics_start_month_rub: 3864693,
-                dynamics_start_month_percent: 5.4,
-                dynamics_start_year_rub: 3864693,
-                dynamics_start_year_percent: 5.4,
-                turnover_days: 121,
-                level: 2,
-                is_total_row: false,
-                children: [
-                  {
-                    id: uuid13,
-                    category_name: 'РВБ ООО',
-                    parent_category_id: uuid12,
-                    quantity_pairs: 13159,
-                    balance_rub: 22268438,
-                    dynamics_start_month_rub: 198757,
-                    dynamics_start_month_percent: 0.8,
-                    dynamics_start_year_rub: 198757,
-                    dynamics_start_year_percent: 0.8,
-                    turnover_days: 84,
-                    level: 3,
-                    is_total_row: false
-                  },
-                  {
-                    id: uuid14,
-                    category_name: 'ИНТЕРНЕТ РЕШЕНИЯ ООО',
-                    parent_category_id: uuid12,
-                    quantity_pairs: 11029,
-                    balance_rub: 19040822,
-                    dynamics_start_month_rub: 3659411,
-                    dynamics_start_month_percent: 21.1,
-                    dynamics_start_year_rub: 3659411,
-                    dynamics_start_year_percent: 21.1,
-                    turnover_days: 82,
-                    level: 3,
-                    is_total_row: false
-                  },
-                  {
-                    id: uuid15,
-                    category_name: 'КУПИШУЗ ООО',
-                    parent_category_id: uuid12,
-                    quantity_pairs: 1774,
-                    balance_rub: 3052024,
-                    dynamics_start_month_rub: -948728,
-                    dynamics_start_month_percent: -29.5,
-                    dynamics_start_year_rub: -948728,
-                    dynamics_start_year_percent: -29.5,
-                    turnover_days: 170,
-                    level: 3,
-                    is_total_row: false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
 
   const buildHierarchy = (flatData: any[], isConsolidated: boolean = false): InventoryTurnoverData[] => {
     const map = new Map()
@@ -471,7 +287,15 @@ const TelegramTurnoverReport: React.FC = () => {
 
       {/* Content */}
       <div className="pb-20">
-        {data.map((item) => renderRow(item))}
+        {data.length > 0 ? (
+          data.map((item) => renderRow(item))
+        ) : !loading && (
+          <div className="text-center py-10 px-4">
+            <p className="text-gray-500">
+              Данные для отчета отсутствуют на {new Date(reportDate).toLocaleDateString('ru-RU')} г.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Desktop redirect button */}
