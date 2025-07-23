@@ -84,9 +84,41 @@ const CashBankReport: React.FC = () => {
 
     let filteredData = itemsToProcess
     if (selectedAccount) {
-      filteredData = itemsToProcess.filter(item =>
-        item.account_name === selectedAccount || item.is_total_row || item.level < 2
-      )
+      // Улучшенная логика фильтрации:
+      // Собираем все связанные строки (выбранный счет, его потомки и все его предки)
+      const finalItems = new Map<string, CashBankReportData>();
+
+      // 1. Находим все строки счетов, соответствующие фильтру
+      const selectedAccountItems = itemsToProcess.filter(
+        item => item.account_name === selectedAccount && item.level === 2
+      );
+
+      // 2. Для каждого найденного счета, добавляем его, его детей и его родителей
+      selectedAccountItems.forEach(accountItem => {
+        // Добавляем сам счет
+        if (accountItem.id) finalItems.set(accountItem.id, accountItem);
+
+        // Добавляем его детей (субконто)
+        itemsToProcess.forEach(child => {
+          if (child.id && child.parent_id === accountItem.id) {
+            finalItems.set(child.id, child);
+          }
+        });
+
+        // Добавляем его родителей (вплоть до корня)
+        let currentParentId = accountItem.parent_id;
+        while (currentParentId) {
+          const parentItem = itemsToProcess.find(item => item.id === currentParentId);
+          if (parentItem && parentItem.id) {
+            finalItems.set(parentItem.id, parentItem);
+            currentParentId = parentItem.parent_id;
+          } else {
+            currentParentId = null;
+          }
+        }
+      });
+
+      filteredData = Array.from(finalItems.values());
     }
 
     const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
@@ -94,11 +126,17 @@ const CashBankReport: React.FC = () => {
     setData(hierarchyData)
 
     const initialExpanded = new Set<string>()
-    filteredData.forEach(item => {
-      if (item.level <= 2) {
-        initialExpanded.add(item.id)
-      }
-    })
+    // Если применен фильтр по счету, разворачиваем все узлы в отфильтрованном наборе.
+    // Иначе, разворачиваем только верхние уровни по умолчанию.
+    if (selectedAccount) {
+      filteredData.forEach(item => item.id && initialExpanded.add(item.id));
+    } else {
+      filteredData.forEach(item => {
+        if (item.level <= 2) {
+          item.id && initialExpanded.add(item.id)
+        }
+      })
+    }
     setExpandedRows(initialExpanded)
   }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount, reportDate])
 
