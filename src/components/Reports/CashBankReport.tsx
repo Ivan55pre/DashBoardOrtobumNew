@@ -292,7 +292,7 @@ const CashBankReport: React.FC = () => {
                   <h3 className={`text-sm font-medium text-gray-900 ${
                     item.is_total_row ? 'font-bold' : ''
                   } ${item.account_type === 'organization' ? 'text-blue-700' : ''}`}>
-                    {item.account_name}
+                    {item.organization_name || item.account_name}
                   </h3>
                   {item.subconto && (
                     <p className="text-xs text-gray-500 mt-1">
@@ -357,12 +357,12 @@ const CashBankReport: React.FC = () => {
               <span className={`${item.is_total_row ? 'font-bold' : ''} ${
                 item.account_type === 'organization' ? 'font-medium text-blue-700 dark:text-blue-300' : ''
               } ${item.level > 0 ? 'text-gray-700 dark:text-gray-300' : ''}`}>
-                {item.level < 2 ? item.account_name : ''}
+                {item.level < 2 ? (item.organization_name || item.account_name) : ''}
               </span>
             </div>
           </td>
           <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
-            {item.level >= 2 ? item.account_name : ''}
+            {item.level === 2 ? item.account_name : ''}
           </td>
           <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
             {item.subconto}
