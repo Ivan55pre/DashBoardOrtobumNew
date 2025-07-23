@@ -34,7 +34,7 @@ const output = Object.entries(groupedItems).map(([organization, items]) => {
 
     return {
       account_name: item.account_name,
-      subconto: item.subconto || item.Субконто2 || null,
+      subconto: item.subconto || null,
       balance_start: parseFloat(item.СуммаНачальныйОстаток) || 0,
       income_amount: parseFloat(item.СуммаОборотДт) || 0,
       expense_amount: parseFloat(item.СуммаОборотКт) || 0,

@@ -572,6 +572,13 @@ USING (
   )
 );
 
+-- Добавляем поле для иерархии
+ALTER TABLE public.cash_bank_report_items
+ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES public.cash_bank_report_items(id) ON DELETE SET NULL;
+ALTER TABLE public.cash_bank_report_items
+ADD COLUMN IF NOT EXISTS account_id TEXT,
+ADD COLUMN IF NOT EXISTS parent_account_id TEXT;
+
 -- 1.9 create_upsert_report_function
 -- Функция для атомарной загрузки/обновления отчета по остаткам.
 -- Она находит или создает организацию, создает метаданные отчета и загружает данные.
@@ -610,62 +617,55 @@ BEGIN
     -- Шаг 3: Удалить старые данные для этого отчета.
     DELETE FROM public.cash_bank_report_items WHERE report_id = v_report_id;
 
-    -- Шаг 4: Вставить новые строки отчета, обрабатывая иерархию.
-    -- Создаем временную таблицу для сопоставления ID счетов из 1С с их новыми UUID в нашей БД.
-    CREATE TEMP TABLE temp_account_map (
-        account_id TEXT PRIMARY KEY,
-        item_id UUID NOT NULL
-    ) ON COMMIT DROP;
-
-    -- Первый проход: вставляем все элементы с NULL в parent_id и заполняем карту.
-    FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
-    LOOP
+    -- Шаг 4: Использовать CTE для эффективной, основанной на наборах, вставки и обновления иерархии.
+    WITH
+    -- 4a: Распаковать массив JSONB в реляционный формат.
+    source_data AS (
+        SELECT
+            -- Убираем пробелы по краям и превращаем пустые строки в NULL для консистентности
+            NULLIF(TRIM(val->>'account_id'), '') AS account_id,
+            NULLIF(TRIM(val->>'parent_account_id'), '') AS parent_account_id,
+            val->>'account_name' AS account_name,
+            val->>'subconto' AS subconto,
+            (COALESCE(val->>'balance_start', val->>'СуммаНачальныйОстаток'))::DECIMAL AS balance_start,
+            (COALESCE(val->>'income_amount', val->>'СуммаОборотДт'))::DECIMAL AS income_amount,
+            (COALESCE(val->>'expense_amount', val->>'СуммаОборотКт'))::DECIMAL AS expense_amount,
+            (COALESCE(val->>'balance_current', val->>'СуммаКонечныйОстаток'))::DECIMAL AS balance_current,
+            val->>'account_type' AS account_type,
+            (val->>'level')::INTEGER AS level,
+            val->>'currency' AS currency,
+            (val->>'is_total_row')::BOOLEAN AS is_total_row
+        FROM jsonb_array_elements(p_report_items) AS val
+    ),
+    -- 4b: Вставить все строки и получить обратно их новые UUID и исходные account_id.
+    inserted_rows AS (
         INSERT INTO public.cash_bank_report_items (
-            report_id, account_name, subconto, balance_start, 
-            income_amount, expense_amount, balance_current, 
-            account_type, level, currency, is_total_row, 
-            account_id, parent_account_id, parent_id
+            report_id, account_id, parent_account_id, account_name, subconto,
+            balance_start, income_amount, expense_amount, balance_current,
+            account_type, level, currency, is_total_row, parent_id
         )
-        VALUES (
-            v_report_id,
-            item->>'account_name',
-            item->>'subconto',
-            (COALESCE(item->>'balance_start', item->>'СуммаНачальныйОстаток'))::DECIMAL,
-            (COALESCE(item->>'income_amount', item->>'СуммаОборотДт'))::DECIMAL,
-            (COALESCE(item->>'expense_amount', item->>'СуммаОборотКт'))::DECIMAL,
-            (COALESCE(item->>'balance_current', item->>'СуммаКонечныйОстаток'))::DECIMAL,
-            item->>'account_type',
-            (item->>'level')::INTEGER,
-            item->>'currency',
-            (item->>'is_total_row')::BOOLEAN,
-            item->>'account_id', -- Новый account_id из 1С
-            item->>'parent_account_id', -- Новый parent_account_id из 1С
-            NULL -- parent_id (FK) изначально NULL
-        )
-        RETURNING id INTO v_item_id;
-        -- Добавляем запись в карту, если account_id предоставлен.
-        IF item->>'account_id' IS NOT NULL THEN
-            INSERT INTO temp_account_map (account_id, item_id) 
-            VALUES (item->>'account_id', v_item_id)
-            ON CONFLICT (account_id) DO NOTHING; -- Игнорируем дубликаты, если они есть
-        END IF;
-    END LOOP;
-
-    -- Второй проход: обновляем parent_id (FK), используя карту и parent_account_id.
-    FOR item IN SELECT * FROM jsonb_array_elements(p_report_items)
-    LOOP
-        -- Обновляем только если есть parent_account_id
-        IF item->>'parent_account_id' IS NOT NULL AND item->>'parent_account_id' != '' THEN
-            -- Находим UUID родителя в нашей карте
-            SELECT item_id INTO v_parent_id FROM temp_account_map WHERE account_id = item->>'parent_account_id';
-            
-            IF v_parent_id IS NOT NULL THEN
-                -- Находим дочернюю строку по ее account_id и обновляем ее parent_id (FK)
-                UPDATE public.cash_bank_report_items SET parent_id = v_parent_id
-                WHERE report_id = v_report_id AND account_id = item->>'account_id';
-            END IF;
-        END IF;
-    END LOOP;
+        SELECT
+            v_report_id, sd.account_id, sd.parent_account_id, sd.account_name, sd.subconto,
+            sd.balance_start, sd.income_amount, sd.expense_amount, sd.balance_current,
+            sd.account_type, sd.level, sd.currency, sd.is_total_row, NULL
+        FROM source_data sd
+        RETURNING id, account_id, parent_account_id -- Возвращаем уже очищенные ID
+    ),
+    -- 4c: Создаем карту сопоставления ID дочерних элементов с ID их родительских элементов.
+    -- Это более читаемый и надежный способ, чем прямой UPDATE с JOIN.
+    parent_map AS (
+        SELECT
+            child.id AS child_id,
+            parent.id AS parent_id
+        FROM inserted_rows AS child
+        JOIN inserted_rows AS parent ON child.parent_account_id = parent.account_id
+        -- JOIN по определению отфильтрует строки, где parent_account_id или account_id равен NULL
+    )
+    -- 4d: Обновляем parent_id в основной таблице, используя созданную карту.
+    UPDATE public.cash_bank_report_items AS target
+    SET parent_id = pm.parent_id
+    FROM parent_map AS pm
+    WHERE target.id = pm.child_id;
 
     RETURN v_report_id;
 END;

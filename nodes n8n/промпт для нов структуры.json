@@ -1,0 +1,5 @@
+давай глобально изменим код и структуру данных.
+текстовые поля оставим для работы пользователя, а всю логику иерархии перенесем на новые поля:
+account_id (string), parent_account_id (string). Так как name может совпадать, а id - уникален.
+Эти account_id, parent_account_id добавь новыми полями во входящий json. (я смогу их предоставить из внешней 1С).
+соответственно измени код CashBankReport, upsert_cash_bank_report, useReportItems.ts, Code zagruz cash_bank_report_items.json и других, связанных объектов.
