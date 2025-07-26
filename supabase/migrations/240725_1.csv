@@ -1,0 +1,6 @@
+id;report_id;account_name;balance_start;income_amount;expense_amount;balance_current;account_type;level;currency;is_total_row;created_at;subconto;parent_id;account_id;parent_account_id
+804b8f06-9d5d-4491-a319-8dc3447186c3;0116086a-1ea8-412a-8f02-f5398cf28966;;45117.48;0.00;0.00;45117.48;total;1;RUB;ÀŒ∆‹;26.07.2025 17:56;;;b0c31f78-dd97-4bde-bcb0-4eadb6d4ecab;
+ea54e53d-e8f9-4eaf-8696-fefc21124da0;0116086a-1ea8-412a-8f02-f5398cf28966;;500000.00;0.00;0.00;500000.00;total;1;RUB;ÀŒ∆‹;26.07.2025 17:56;;;b0c31f78-dd97-4bde-bcb0-4eadb6d4ecab;
+0c483709-5430-4000-a55b-39afd2cdf1e5;0116086a-1ea8-412a-8f02-f5398cf28966;Õ¡ƒ;13140.98;0.00;0.00;13140.98;bank;2;RUB;ÀŒ∆‹;26.07.2025 17:56;;804b8f06-9d5d-4491-a319-8dc3447186c3;1ead4184-d0cb-11ef-967e-2c6dc1e036d0;b0c31f78-dd97-4bde-bcb0-4eadb6d4ecab
+e16281e2-b3b4-406c-9b8a-ce6c878e658e;0116086a-1ea8-412a-8f02-f5398cf28966;—·Â·‡ÌÍ;31976.50;0.00;0.00;31976.50;bank;2;RUB;ÀŒ∆‹;26.07.2025 17:56;;804b8f06-9d5d-4491-a319-8dc3447186c3;1ead4185-d0cb-11ef-967e-2c6dc1e036d0;b0c31f78-dd97-4bde-bcb0-4eadb6d4ecab
+2d045a37-664d-4b84-9b22-18949d014f3c;0116086a-1ea8-412a-8f02-f5398cf28966;;500000.00;0.00;0.00;500000.00;total;2;RUB;ÀŒ∆‹;26.07.2025 17:56;;804b8f06-9d5d-4491-a319-8dc3447186c3;8cdfd28c-f38d-11ef-967e-2c6dc1e036d0;b0c31f78-dd97-4bde-bcb0-4eadb6d4ecab

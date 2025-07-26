@@ -365,7 +365,7 @@ const CashBankReport: React.FC = () => {
             {item.level === 2 ? item.account_name : ''}
           </td>
           <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
-            {item.subconto}
+            {item.level >= 3 ? item.account_name : ''}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
             {item.balance_start !== 0 ? formatCurrency(item.balance_start) : ''}
