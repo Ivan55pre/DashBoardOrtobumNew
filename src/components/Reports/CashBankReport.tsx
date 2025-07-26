@@ -331,6 +331,31 @@ const CashBankReport: React.FC = () => {
     const isExpanded = expandedRows.has(item.id)
     const paddingLeft = item.level * 24
 
+    const renderIndentedName = (name: string | null | undefined) => (
+      <div className="flex items-center" style={{ paddingLeft: `${paddingLeft}px` }}>
+        {hasChildren ? (
+          <button
+            onClick={() => toggleExpanded(item.id)}
+            className="mr-2 p-1 hover:bg-gray-200 dark:hover:bg-dark-600 rounded transition-colors"
+            title={isExpanded ? 'Свернуть' : 'Развернуть'}
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            )}
+          </button>
+        ) : (
+          <div className="w-6 h-6 mr-2" />
+        )}
+        <span className={`${item.is_total_row ? 'font-bold' : ''} ${
+          item.account_type === 'organization' ? 'font-medium text-blue-700 dark:text-blue-300' : ''
+        } ${item.level > 0 ? 'text-gray-700 dark:text-gray-300' : ''}`}>
+          {name}
+        </span>
+      </div>
+    );
+
     return (
       <React.Fragment key={item.id}>
         <tr className={`hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors ${
@@ -338,28 +363,13 @@ const CashBankReport: React.FC = () => {
           item.account_type === 'organization' ? 'bg-blue-50 dark:bg-blue-900/20 font-medium' : ''
         }`}>
           <td className="px-6 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
-            <div className="flex items-center" style={{ paddingLeft: `${paddingLeft}px` }}>
-              {hasChildren ? (
-                <button
-                  onClick={() => toggleExpanded(item.id)}
-                  className="mr-2 p-1 hover:bg-gray-200 dark:hover:bg-dark-600 rounded transition-colors"
-                  title={isExpanded ? 'Свернуть' : 'Развернуть'}
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-500" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-500" />
-                  )}
-                </button>
-              ) : (
-                <div className="w-6 h-6 mr-2" />
-              )}
-              <span className={`${item.is_total_row ? 'font-bold' : ''} ${
-                item.account_type === 'organization' ? 'font-medium text-blue-700 dark:text-blue-300' : ''
-              } ${item.level > 0 ? 'text-gray-700 dark:text-gray-300' : ''}`}>
-                {item.subconto || item.account_name}
-              </span>
-            </div>
+            {item.level < 2 ? renderIndentedName(item.organization_name || item.account_name) : ''}
+          </td>
+          <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
+            {item.level === 2 ? renderIndentedName(item.account_name) : ''}
+          </td>
+          <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">
+            {item.level >= 3 ? renderIndentedName(item.subconto) : ''}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
             {item.balance_start !== 0 ? formatCurrency(item.balance_start) : ''}
@@ -383,7 +393,7 @@ const CashBankReport: React.FC = () => {
     return (
       <ReportSkeleton
         isMobile={isMobile}
-        columnCount={5}
+        columnCount={7}
         filterCount={2}
       />
     )
@@ -519,8 +529,14 @@ const CashBankReport: React.FC = () => {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-dark-700">
             <tr>
-              <th className="w-2/5 px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Наименование
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Организация
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Банковский счет
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Субконто
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Остаток на начало предыдущего рабочего дня
@@ -541,7 +557,7 @@ const CashBankReport: React.FC = () => {
               data.map((item) => renderDesktopRow(item))
             ) : (
               <tr>
-                <td colSpan={5} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
+                <td colSpan={7} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
                   Нет данных для отображения.
                 </td>
               </tr>
