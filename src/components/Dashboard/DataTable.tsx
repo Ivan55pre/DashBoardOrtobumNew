@@ -16,6 +16,46 @@ const DataTable: React.FC<DataTableProps> = ({ title }) => {
     { id: 4, date: '2024-01-12', amount: '₽5,200', status: 'Отменено', client: 'ИП Петров' },
   ]
 
+  const fieldMap: Record<string, keyof typeof data[0]> = {
+    дата: 'date',
+    сумма: 'amount',
+    статус: 'status',
+    клиент: 'client',
+  }
+
+  const sortedData = React.useMemo(() => {
+    if (!sortField) {
+      return data
+    }
+
+    const field = (fieldMap[sortField] ?? sortField) as keyof typeof data[0]
+    const sorted = [...data].sort((a, b) => {
+      const aVal = a[field]
+      const bVal = b[field]
+
+      if (field === 'date') {
+        return (
+          new Date(aVal as string).getTime() -
+          new Date(bVal as string).getTime()
+        )
+      }
+
+      if (field === 'amount') {
+        const parseAmount = (v: string) =>
+          parseFloat(v.replace(/[^0-9.-]+/g, ''))
+        return parseAmount(aVal as string) - parseAmount(bVal as string)
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return aVal.localeCompare(bVal)
+      }
+
+      return 0
+    })
+
+    return sortDirection === 'asc' ? sorted : sorted.reverse()
+  }, [sortField, sortDirection])
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -79,7 +119,7 @@ const DataTable: React.FC<DataTableProps> = ({ title }) => {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {data.map((row) => (
+            {sortedData.map((row) => (
               <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-dark-700">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                   {row.date}
