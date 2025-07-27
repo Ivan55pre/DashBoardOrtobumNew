@@ -39,21 +39,17 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
       setData(null);
 
       try {
-        // 1. Получаем метаданные отчета
-        const { data: reportMeta, error: metaError } = await supabase
-          .from('report_metadata')
-          .select('id, organization_id, organizations(name)')
-          .in('organization_id', organizationIds)
-          .eq('report_type', reportType)
-          .eq('report_date', reportDate);
-
-        if (metaError) throw metaError;
-
-        if (reportMeta && reportMeta.length > 0) {
-          // 2. Если метаданные есть, получаем данные отчета
-          const reportIds = reportMeta.map(r => r.id);
-          const tableName = reportTypeToTableMap[reportType];
-          let query = supabase.from(tableName).select('*').in('report_id', reportIds);
+        // 1. Загружаем строки отчета через связь с report_metadata,
+        //    фильтруя по дате отчета именно в метаданных
+        const tableName = reportTypeToTableMap[reportType];
+        let query = supabase
+          .from(tableName)
+          .select(
+            `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
+          )
+          .in('report_metadata.organization_id', organizationIds)
+          .eq('report_metadata.report_type', reportType)
+          .eq('report_metadata.report_date', reportDate);
 
           // Применяем сортировку
           orderColumns.forEach(order => {
@@ -63,17 +59,21 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
 
-          // Добавляем имя организации к каждой строке для консолидированного вида
-          const itemsWithOrg = (reportItems || []).map(item => {
-            const meta = reportMeta.find(m => m.id === (item as any).report_id);
-            return { ...item, organization_name: (meta as any)?.organizations?.name || 'Unknown Org' };
-          });
+          if (reportItems && reportItems.length > 0) {
+            // Добавляем имя организации к каждой строке через join
+            const itemsWithOrg = reportItems.map(item => {
+              const meta = (item as any).report_metadata;
+              return {
+                ...(item as any),
+                organization_name: meta?.organizations?.name || 'Unknown Org',
+              };
+            });
 
-          setData(itemsWithOrg as T[]);
-        } else {
-          setData(null); // Отчет не найден
-          handleNotFound();
-        }
+            setData(itemsWithOrg as T[]);
+          } else {
+            setData(null);
+            handleNotFound();
+          }
       } catch (err: any) {
         console.error(`Error loading ${reportType} report:`, err);
         setError(err);
