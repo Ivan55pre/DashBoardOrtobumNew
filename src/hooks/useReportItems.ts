@@ -75,11 +75,13 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
 
           if (reportItems && reportItems.length > 0) {
             // Добавляем имя организации к каждой строке через join
-            const itemsWithOrg = reportItems.map(item => {
-              const anyItem = item as any;
-              const orgData = reportType === 'cash_bank' ? anyItem.organizations : anyItem.report_metadata?.organizations;
+            const itemsWithOrg = reportItems.map((item: any) => {
+              const orgData =
+                reportType === 'cash_bank'
+                  ? item.organizations
+                  : item.report_metadata?.organizations;
               return {
-                ...anyItem,
+                ...item,
                 organization_name: orgData?.name || 'Unknown Org',
               };
             });
