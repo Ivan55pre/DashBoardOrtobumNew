@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, ChevronRight, Download } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 import ReportSkeleton from './ReportSkeleton'
@@ -26,8 +26,13 @@ interface CashBankReportData {
 const CashBankReport: React.FC = () => {
   const [data, setData] = useState<CashBankReportData[]>([])
   const [loading, setLoading] = useState(true)
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
+
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('') // '' means "All Organizations"
+  const [selectedAccount, setSelectedAccount] = useState<string>('')
+  const [availableAccounts, setAvailableAccounts] = useState<string[]>([])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -43,16 +48,14 @@ const CashBankReport: React.FC = () => {
   const { organizations, isLoading: isLoadingOrgs } = useUserOrganizations()
 
   const targetOrgIds = useMemo(() => {
-    // Этот параметр больше не используется для фильтрации в useReportItems для данного отчета,
-    // но он необходим для запуска хука.
     if (isLoadingOrgs || !organizations) return null
-    return organizations.map(o => o.id)
-  }, [organizations, isLoadingOrgs])
+    return selectedOrgId === '' ? organizations.map(o => o.id) : [selectedOrgId]
+  }, [selectedOrgId, organizations, isLoadingOrgs])
 
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<CashBankReportData>({
     organizationIds: targetOrgIds,
     reportType: 'cash_bank',
-    // reportDate не передается, т.к. для этого отчета он не нужен
+    reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'account_name' }],
   })
 
@@ -73,18 +76,69 @@ const CashBankReport: React.FC = () => {
       itemsToProcess = []
     }
 
-    const isConsolidatedView = (organizations?.length ?? 0) > 1
-    const hierarchyData = buildHierarchy(itemsToProcess, isConsolidatedView)
+    const accounts = [...new Set(itemsToProcess
+      .filter(item => item.level === 2 && item.account_name)
+      .map(item => item.account_name as string)
+    )]
+    setAvailableAccounts(accounts)
+
+    let filteredData = itemsToProcess
+    if (selectedAccount) {
+      // Улучшенная логика фильтрации:
+      // Собираем все связанные строки (выбранный счет, его потомки и все его предки)
+      const finalItems = new Map<string, CashBankReportData>();
+
+      // 1. Находим все строки счетов, соответствующие фильтру
+      const selectedAccountItems = itemsToProcess.filter(
+        item => item.account_name === selectedAccount && item.level === 2
+      );
+
+      // 2. Для каждого найденного счета, добавляем его, его детей и его родителей
+      selectedAccountItems.forEach(accountItem => {
+        // Добавляем сам счет
+        if (accountItem.id) finalItems.set(accountItem.id, accountItem);
+
+        // Добавляем его детей (субконто)
+        itemsToProcess.forEach(child => {
+          if (child.id && child.parent_id === accountItem.id) {
+            finalItems.set(child.id, child);
+          }
+        });
+
+        // Добавляем его родителей (вплоть до корня)
+        let currentParentId = accountItem.parent_id;
+        while (currentParentId) {
+          const parentItem = itemsToProcess.find(item => item.id === currentParentId);
+          if (parentItem && parentItem.id) {
+            finalItems.set(parentItem.id, parentItem);
+            currentParentId = parentItem.parent_id;
+          } else {
+            currentParentId = null;
+          }
+        }
+      });
+
+      filteredData = Array.from(finalItems.values());
+    }
+
+    const isConsolidatedView = selectedOrgId === '' && (organizations?.length ?? 0) > 1
+    const hierarchyData = buildHierarchy(filteredData, isConsolidatedView)
     setData(hierarchyData)
 
     const initialExpanded = new Set<string>()
-    itemsToProcess.forEach(item => {
-      if (item.level <= 2) {
-        item.id && initialExpanded.add(item.id)
-      }
-    })
+    // Если применен фильтр по счету, разворачиваем все узлы в отфильтрованном наборе.
+    // Иначе, разворачиваем только верхние уровни по умолчанию.
+    if (selectedAccount) {
+      filteredData.forEach(item => item.id && initialExpanded.add(item.id));
+    } else {
+      filteredData.forEach(item => {
+        if (item.level <= 2) {
+          item.id && initialExpanded.add(item.id)
+        }
+      })
+    }
     setExpandedRows(initialExpanded)
-  }, [loading, reportItems, reportError, organizations])
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount, reportDate])
 
   // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
   // Этот метод надежнее, чем построение на основе уровней (level).
@@ -200,7 +254,7 @@ const CashBankReport: React.FC = () => {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `cash_bank_report.csv`
+    a.download = `cash_bank_report_${reportDate}.csv`
     a.click()
     window.URL.revokeObjectURL(url)
   }
@@ -361,6 +415,41 @@ const CashBankReport: React.FC = () => {
                 <Download className="w-4 h-4" />
               </button>
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-4 h-4 text-gray-500" />
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Mobile Filters */}
+            <div className="space-y-2">
+              <select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Все организации</option>
+                {(organizations || []).map(org => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedAccount}
+                onChange={(e) => setSelectedAccount(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Все счета</option>
+                {availableAccounts.map(account => (
+                  <option key={account} value={account}>{account}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -386,7 +475,7 @@ const CashBankReport: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Банковские счета рублевые
+            Банковские счета рублевые на {new Date(reportDate).toLocaleDateString('ru-RU')} г.
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Нажмите на стрелки для сворачивания/разворачивания организаций
@@ -394,6 +483,37 @@ const CashBankReport: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <input
+              type="date"
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+          
+          <select
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Все организации</option>
+            {(organizations || []).map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedAccount}
+            onChange={(e) => setSelectedAccount(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            <option value="">Все счета</option>
+            {availableAccounts.map(account => (
+              <option key={account} value={account}>{account}</option>
+            ))}
+          </select>
           
           <button 
             onClick={exportToCSV}
