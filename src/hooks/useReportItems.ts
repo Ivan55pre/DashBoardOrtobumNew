@@ -28,48 +28,56 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
 
   useEffect(() => {
     const fetchReportItems = async () => {
-      if (!organizationIds || organizationIds.length === 0) {
-        setData(null);
-        setIsLoading(false);
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
       setData(null);
 
       try {
-        // 1. Загружаем строки отчета через связь с report_metadata,
-        //    фильтруя по дате отчета именно в метаданных
         const tableName = reportTypeToTableMap[reportType];
-        let query = supabase
-          .from(tableName)
-          .select(
-            `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
-          )
-          .in('report_metadata.organization_id', organizationIds)
-          .eq('report_metadata.report_type', reportType);
+        let query;
 
-        // Применяем фильтр по дате, только если она указана
-        if (reportDate) {
-          query = query.eq('report_metadata.report_date', reportDate);
+        if (reportType === 'cash_bank') {
+          // Для отчета "Касса/Банк" загружаем все данные без фильтра, как было запрошено.
+          // Предполагается, что таблица cash_bank_report_items имеет прямую связь с organizations.
+          query = supabase.from(tableName).select(`*, organizations(name)`);
+        } else {
+          if (!organizationIds || organizationIds.length === 0) {
+            setData(null);
+            setIsLoading(false);
+            return;
+          }
+          // 1. Загружаем строки отчета через связь с report_metadata,
+          //    фильтруя по дате отчета именно в метаданных
+          query = supabase
+            .from(tableName)
+            .select(
+              `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
+            )
+            .in('report_metadata.organization_id', organizationIds)
+            .eq('report_metadata.report_type', reportType);
+
+          // Применяем фильтр по дате, только если она указана
+          if (reportDate) {
+            query = query.eq('report_metadata.report_date', reportDate);
+          }
         }
 
         // Применяем сортировку
         orderColumns.forEach(order => {
           query = query.order(order.column, order.options);
         });
-
+        
         const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
 
           if (reportItems && reportItems.length > 0) {
             // Добавляем имя организации к каждой строке через join
             const itemsWithOrg = reportItems.map(item => {
-              const meta = (item as any).report_metadata;
+              const anyItem = item as any;
+              const orgData = reportType === 'cash_bank' ? anyItem.organizations : anyItem.report_metadata?.organizations;
               return {
-                ...(item as any),
-                organization_name: meta?.organizations?.name || 'Unknown Org',
+                ...anyItem,
+                organization_name: orgData?.name || 'Unknown Org',
               };
             });
 
