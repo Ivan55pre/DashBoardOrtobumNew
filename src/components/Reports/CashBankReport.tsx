@@ -26,7 +26,6 @@ interface CashBankReportData {
 const CashBankReport: React.FC = () => {
   const [data, setData] = useState<CashBankReportData[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
 
@@ -55,7 +54,6 @@ const CashBankReport: React.FC = () => {
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<CashBankReportData>({
     organizationIds: targetOrgIds,
     reportType: 'cash_bank',
-    reportDate: reportDate,
     orderColumns: [{ column: 'level' }, { column: 'account_name' }],
   })
 
@@ -138,7 +136,7 @@ const CashBankReport: React.FC = () => {
       })
     }
     setExpandedRows(initialExpanded)
-  }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount, reportDate])
+  }, [loading, reportItems, reportError, organizations, selectedOrgId, selectedAccount])
 
   // Функция строит иерархию (дерево) из плоского списка, используя parent_id.
   // Этот метод надежнее, чем построение на основе уровней (level).
@@ -254,7 +252,7 @@ const CashBankReport: React.FC = () => {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `cash_bank_report_${reportDate}.csv`
+    a.download = `cash_bank_report.csv`
     a.click()
     window.URL.revokeObjectURL(url)
   }
@@ -415,16 +413,6 @@ const CashBankReport: React.FC = () => {
                 <Download className="w-4 h-4" />
               </button>
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <input
-                type="date"
-                value={reportDate}
-                onChange={(e) => setReportDate(e.target.value)}
-                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
 
             {/* Mobile Filters */}
             <div className="space-y-2">
@@ -475,7 +463,7 @@ const CashBankReport: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Банковские счета рублевые на {new Date(reportDate).toLocaleDateString('ru-RU')} г.
+            Банковские счета рублевые
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Нажмите на стрелки для сворачивания/разворачивания организаций
@@ -483,16 +471,6 @@ const CashBankReport: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-          
           <select
             value={selectedOrgId}
             onChange={(e) => setSelectedOrgId(e.target.value)}
