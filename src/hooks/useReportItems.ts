@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../contexts/AuthContext';
-import type { PostgrestFilterBuilder } from '@supabase/supabase-js';
+import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 interface UseReportItemsProps {
   organizationIds: string[] | null;
