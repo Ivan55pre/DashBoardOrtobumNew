@@ -4,7 +4,7 @@ import { supabase } from '../contexts/AuthContext';
 interface UseReportItemsProps {
   organizationIds: string[] | null;
   reportType: 'debt' | 'inventory_turnover' | 'plan_fact' | 'cash_bank';
-  reportDate: string;
+  reportDate?: string;
   orderColumns?: { column: string, options?: { ascending: boolean } }[];
   onNotFound?: () => void; // Callback для вызова, когда отчет не найден
 }
@@ -28,7 +28,7 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
 
   useEffect(() => {
     const fetchReportItems = async () => {
-      if (!organizationIds || organizationIds.length === 0 || !reportDate) {
+      if (!organizationIds || organizationIds.length === 0) {
         setData(null);
         setIsLoading(false);
         return;
@@ -49,8 +49,11 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           )
           .in('report_metadata.organization_id', organizationIds)
           .eq('report_metadata.report_type', reportType)
-          .eq('report_metadata.report_date', reportDate);
 
+          // Применяем фильтр по дате, только если она указана
+          if (reportDate) {
+            query = query.eq('report_metadata.report_date', reportDate);
+          }
           // Применяем сортировку
           orderColumns.forEach(order => {
             query = query.order(order.column, order.options);

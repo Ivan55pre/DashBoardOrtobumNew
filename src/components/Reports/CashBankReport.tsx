@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-//import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 import ReportSkeleton from './ReportSkeleton'
@@ -54,6 +54,7 @@ const CashBankReport: React.FC = () => {
   const { data: reportItems, isLoading: isLoadingReport, error: reportError } = useReportItems<CashBankReportData>({
     organizationIds: targetOrgIds,
     reportType: 'cash_bank',
+    // reportDate не передается, т.к. для этого отчета он не нужен
     orderColumns: [{ column: 'level' }, { column: 'account_name' }],
   })
 
