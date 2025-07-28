@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../contexts/AuthContext';
+import type { PostgrestFilterBuilder } from '@supabase/supabase-js';
 
 interface UseReportItemsProps {
   organizationIds: string[] | null;
@@ -34,7 +35,9 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
 
       try {
         const tableName = reportTypeToTableMap[reportType];
-        let query;
+        // Явно указываем тип для переменной query, чтобы TypeScript мог корректно
+        // работать с разными построителями запросов в ветках if/else.
+        let query: PostgrestFilterBuilder<any, any, any[], any>;
 
         if (reportType === 'cash_bank') {
           // Для отчета "Касса/Банк" загружаем все данные без фильтра, как было запрошено.
