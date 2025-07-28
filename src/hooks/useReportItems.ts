@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../contexts/AuthContext';
-import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 interface UseReportItemsProps {
   organizationIds: string[] | null;
   reportType: 'debt' | 'inventory_turnover' | 'plan_fact' | 'cash_bank';
-  reportDate?: string;
+  reportDate: string;
   orderColumns?: { column: string, options?: { ascending: boolean } }[];
   onNotFound?: () => void; // Callback для вызова, когда отчет не найден
 }
@@ -29,60 +28,44 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
 
   useEffect(() => {
     const fetchReportItems = async () => {
+      if (!organizationIds || organizationIds.length === 0 || !reportDate) {
+        setData(null);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       setData(null);
 
       try {
+        // 1. Загружаем строки отчета через связь с report_metadata,
+        //    фильтруя по дате отчета именно в метаданных
         const tableName = reportTypeToTableMap[reportType];
-        // Явно указываем тип для переменной query, чтобы TypeScript мог корректно
-        // работать с разными построителями запросов в ветках if/else.
-        let query: PostgrestFilterBuilder<any, any, any[], any>;
+        let query = supabase
+          .from(tableName)
+          .select(
+            `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
+          )
+          .in('report_metadata.organization_id', organizationIds)
+          .eq('report_metadata.report_type', reportType)
+          .eq('report_metadata.report_date', reportDate);
 
-        if (reportType === 'cash_bank') {
-          // Для отчета "Касса/Банк" загружаем все данные без фильтра, как было запрошено.
-          // Предполагается, что таблица cash_bank_report_items имеет прямую связь с organizations.
-          query = supabase.from(tableName).select(`*, organizations(name)`);
-        } else {
-          if (!organizationIds || organizationIds.length === 0) {
-            setData(null);
-            setIsLoading(false);
-            return;
-          }
-          // 1. Загружаем строки отчета через связь с report_metadata,
-          //    фильтруя по дате отчета именно в метаданных
-          query = supabase
-            .from(tableName)
-            .select(
-              `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
-            )
-            .in('report_metadata.organization_id', organizationIds)
-            .eq('report_metadata.report_type', reportType);
+          // Применяем сортировку
+          orderColumns.forEach(order => {
+            query = query.order(order.column, order.options);
+          });
 
-          // Применяем фильтр по дате, только если она указана
-          if (reportDate) {
-            query = query.eq('report_metadata.report_date', reportDate);
-          }
-        }
-
-        // Применяем сортировку
-        orderColumns.forEach(order => {
-          query = query.order(order.column, order.options);
-        });
-        
-        const { data: reportItems, error: itemsError } = await query;
+          const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
 
           if (reportItems && reportItems.length > 0) {
             // Добавляем имя организации к каждой строке через join
-            const itemsWithOrg = reportItems.map((item: any) => {
-              const orgData =
-                reportType === 'cash_bank'
-                  ? item.organizations
-                  : item.report_metadata?.organizations;
+            const itemsWithOrg = reportItems.map(item => {
+              const meta = (item as any).report_metadata;
               return {
-                ...item,
-                organization_name: orgData?.name || 'Unknown Org',
+                ...(item as any),
+                organization_name: meta?.organizations?.name || 'Unknown Org',
               };
             });
 
