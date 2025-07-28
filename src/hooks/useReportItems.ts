@@ -48,18 +48,19 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
             `*, report_metadata!inner(id, organization_id, report_date, organizations(name))`
           )
           .in('report_metadata.organization_id', organizationIds)
-          .eq('report_metadata.report_type', reportType)
+          .eq('report_metadata.report_type', reportType);
 
-          // Применяем фильтр по дате, только если она указана
-          if (reportDate) {
-            query = query.eq('report_metadata.report_date', reportDate);
-          }
-          // Применяем сортировку
-          orderColumns.forEach(order => {
-            query = query.order(order.column, order.options);
-          });
+        // Применяем фильтр по дате, только если она указана
+        if (reportDate) {
+          query = query.eq('report_metadata.report_date', reportDate);
+        }
 
-          const { data: reportItems, error: itemsError } = await query;
+        // Применяем сортировку
+        orderColumns.forEach(order => {
+          query = query.order(order.column, order.options);
+        });
+
+        const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
 
           if (reportItems && reportItems.length > 0) {
