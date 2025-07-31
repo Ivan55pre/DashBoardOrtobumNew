@@ -699,7 +699,7 @@ USING (
     SELECT 1
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
-    WHERE rm.id = inventory_turnover_report_items.report_id AND om.user_id = auth.uid()
+    WHERE rm.id = inventory_turnover_report_items.report_id
   )
 );
 
@@ -712,7 +712,6 @@ WITH CHECK (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
-      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
@@ -726,7 +725,6 @@ USING (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
-      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
@@ -740,7 +738,6 @@ USING (
     FROM report_metadata rm
     JOIN organization_members om ON rm.organization_id = om.organization_id
     WHERE rm.id = inventory_turnover_report_items.report_id
-      AND om.user_id = auth.uid()
       AND om.role = 'admin'
   )
 );
