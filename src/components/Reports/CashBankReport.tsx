@@ -399,6 +399,24 @@ const CashBankReport: React.FC = () => {
     )
   }
 
+  // Отображаем ошибку, если она есть
+  if (reportError) {
+    return (
+      <div className="card p-6">
+        <div className="text-center py-10">
+          <h3 className="text-lg font-semibold text-red-600 mb-2">Ошибка загрузки данных</h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-4">{reportError.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="btn-primary"
+          >
+            Перезагрузить страницу
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (isMobile) {
     return (
       <div className="card p-0 overflow-hidden">
@@ -408,7 +426,7 @@ const CashBankReport: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Банковские счета рублевые
               </h3>
-              <button 
+              <button
                 onClick={exportToCSV}
                 className="btn-primary text-sm px-3 py-1"
               >
@@ -458,7 +476,7 @@ const CashBankReport: React.FC = () => {
             data.map((item) => renderMobileRow(item))
           ) : (
             <div className="text-center py-10 px-4 text-gray-500 dark:text-gray-400">
-              Нет данных для отображения.
+              Нет данных для выбранной даты и параметров
             </div>
           )}
         </div>
@@ -558,7 +576,7 @@ const CashBankReport: React.FC = () => {
             ) : (
               <tr>
                 <td colSpan={7} className="text-center py-10 px-6 text-gray-500 dark:text-gray-400">
-                  Нет данных для отображения.
+                  Нет данных для выбранной даты и параметров
                 </td>
               </tr>
             )}
