@@ -26,7 +26,9 @@ interface CashBankReportData {
 const CashBankReport: React.FC = () => {
   const [data, setData] = useState<CashBankReportData[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
+  // Устанавливаем дату по умолчанию на ту, для которой есть тестовые данные.
+  // В продакшене можно вернуть new Date().toISOString().split('T')[0]
+  const [reportDate, setReportDate] = useState('2025-07-24')
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
 
