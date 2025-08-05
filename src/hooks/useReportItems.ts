@@ -47,7 +47,8 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
         // 1. Извлеките соответствующие метаданные отчета.
         // 2. Извлеките денежные средства/банковские позиции, используя идентификаторы отчетов из шага 1.
         // Это менее эффективно, но позволяет избежать ошибки, пока схема не будет исправлена.
-        // При этом предполагается, что столбец внешнего ключа в 'cash_bank_report_items' имеет имя 'report_id'        if (reportType === 'cash_bank') {
+        // При этом предполагается, что столбец внешнего ключа в 'cash_bank_report_items' имеет имя 'report_id'
+        if (reportType === 'cash_bank') {
           // Step 1: Fetch report metadata to get report IDs and organization names.
           const { data: reports, error: reportsError } = await supabase
             .from('report_metadata')
