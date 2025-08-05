@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../contexts/AuthContext';
+import { isAdminUser } from '../utils/auth';
 
 interface UseReportItemsProps {
   organizationIds: string[] | null;
@@ -39,28 +40,36 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
       setData(null);
 
       try {
-        // После добавления внешнего ключа для cash_bank_report_items,
-        // отдельная логика больше не нужна. Все отчеты обрабатываются единообразно.
-        const tableName = reportTypeToTableMap[reportType];
-        let query = supabase
-          .from(tableName)
-          .select(`*, report_metadata!inner(id, organization_id, report_date, organizations(name))`)
-          .in('report_metadata.organization_id', organizationIds)
-          .eq('report_metadata.report_type', reportType)
-          .eq('report_metadata.report_date', reportDate);
-
-        orderColumns.forEach(order => { query = query.order(order.column, order.options); });
-
-        const { data: reportItems, error: itemsError } = await query;
-        if (itemsError) throw itemsError;
-
-        if (reportItems && reportItems.length > 0) {
-          const itemsWithOrg = reportItems.map(item => ({ ...(item as any), organization_name: (item as any).report_metadata?.organizations?.name || 'Unknown Org' }));
-          setData(itemsWithOrg as T[]);
-        } else {
-          setData(null);
-          handleNotFound();
-        }
+          const tableName = reportTypeToTableMap[reportType];
+          let query = supabase
+            .from(tableName)
+            .select(`*, report_metadata!inner(id, organization_id, report_date, organizations(name))`)
+            .eq('report_metadata.report_type', reportType)
+            .eq('report_metadata.report_date', reportDate);
+  
+          orderColumns.forEach(order => { query = query.order(order.column, order.options); });
+  
+          const { data: reportItems, error: itemsError } = await query;
+          if (itemsError) throw itemsError;
+  
+          // Фильтрация по организациям, если пользователь не администратор
+          let filteredItems = reportItems || [];
+          if (reportItems && !(await isAdminUser())) {
+            filteredItems = reportItems.filter(item =>
+              organizationIds?.includes(item.report_metadata.organization_id)
+            );
+          }
+  
+          if (filteredItems.length > 0) {
+            const itemsWithOrg = filteredItems.map(item => ({
+              ...item,
+              organization_name: item.report_metadata?.organizations?.name || 'Unknown Org'
+            }));
+            setData(itemsWithOrg as T[]);
+          } else {
+            setData(null);
+            handleNotFound();
+          }
       } catch (err: any) {
         console.error(`Error loading ${reportType} report:`, err);
         setError(err);

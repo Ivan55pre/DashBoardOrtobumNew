@@ -1242,6 +1242,21 @@ BEGIN
 END;
 $$;
 
+-- Функция проверки прав глобального администратора
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.organization_members
+    WHERE user_id = auth.uid() AND role = 'admin'
+  );
+END;
+$$;
+
 -- 20.07.25
 -- ограничение уникальности
 ALTER TABLE public.organization_members
