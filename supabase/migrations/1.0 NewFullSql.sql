@@ -1275,3 +1275,16 @@ WITH CHECK (
     role = 'admin' AND organization_id = OLD.organization_id
   )
 );
+
+--(05.08.25)
+--ALTER TABLE ...: Указывает, что мы изменяем структуру таблицы cash_bank_report_items.
+--ADD CONSTRAINT ...: Добавляет новое ограничение. Имя cash_bank_report_items_report_id_fkey — это стандартное соглашение об именовании для внешних ключей --(таблица_колонка_fkey).
+--FOREIGN KEY (report_id): Объявляет колонку report_id в нашей таблице как внешний ключ.
+--REFERENCES public.report_metadata (id): Устанавливает связь с колонкой id в таблице report_metadata.
+--ON DELETE CASCADE: Очень важная опция. 
+
+ALTER TABLE public.cash_bank_report_items
+ADD CONSTRAINT cash_bank_report_items_report_id_fkey
+FOREIGN KEY (report_id)
+REFERENCES public.report_metadata (id)
+ON DELETE CASCADE;
