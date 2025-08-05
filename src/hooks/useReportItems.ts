@@ -41,14 +41,13 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
       try {
         const tableName = reportTypeToTableMap[reportType];
 
-        // WORKAROUND: The 'cash_bank_report_items' table is missing the foreign key relationship
-        // to 'report_metadata' in the database schema, which causes the implicit inner join to fail.
-        // This block handles this specific case by performing a two-step query:
-        // 1. Fetch the relevant report metadata.
-        // 2. Fetch the cash/bank items using the report IDs from step 1.
-        // This is less efficient but avoids the error until the schema is fixed.
-        // This assumes the foreign key column in 'cash_bank_report_items' is named 'report_id'.
-        if (reportType === 'cash_bank') {
+        // ОБХОДНОЙ ПУТЬ: в таблице 'cash_bank_report_items' отсутствует связь внешнего ключа
+        // с 'report_metadata' в схеме базы данных, что приводит к сбою неявного внутреннего соединения.
+        // Этот блок обрабатывает этот конкретный случай, выполняя двухэтапный запрос:
+        // 1. Извлеките соответствующие метаданные отчета.
+        // 2. Извлеките денежные средства/банковские позиции, используя идентификаторы отчетов из шага 1.
+        // Это менее эффективно, но позволяет избежать ошибки, пока схема не будет исправлена.
+        // При этом предполагается, что столбец внешнего ключа в 'cash_bank_report_items' имеет имя 'report_id'        if (reportType === 'cash_bank') {
           // Step 1: Fetch report metadata to get report IDs and organization names.
           const { data: reports, error: reportsError } = await supabase
             .from('report_metadata')
@@ -65,7 +64,12 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           } else {
             const reportIds = reports.map(r => r.id);
             const reportIdToOrgNameMap = new Map<string, string>(
-              reports.map(r => [r.id, r.organizations?.name || 'Unknown Org'])
+              reports.map(r => {
+                // Типы Supabase могут неверно определять связь "один-ко-многим" как массив из одного элемента.
+                // Этот код защищенно обрабатывает оба случая: одиночный объект или массив.
+                const organization = Array.isArray(r.organizations) ? r.organizations[0] : r.organizations;
+                return [r.id, organization?.name || 'Unknown Org'];
+              })
             );
 
             // Step 2: Fetch report items using the collected report IDs.
