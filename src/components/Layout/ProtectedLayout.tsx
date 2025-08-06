@@ -5,12 +5,7 @@ import Layout from './Layout';
 import { ReportDateProvider } from '../../contexts/ReportDateContext';
 
 const ProtectedLayout: React.FC = () => {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    // Можно заменить на более красивый спиннер/скелетон
-    return <div className="flex justify-center items-center h-screen">Загрузка...</div>;
-  }
+  const { user } = useAuth();
 
   if (!user) {
     return <Navigate to="/login" replace />;
