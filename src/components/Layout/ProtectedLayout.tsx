@@ -1,16 +1,26 @@
-import React from 'react'
-import { Outlet } from 'react-router-dom'
-import ProtectedRoute from '../Auth/ProtectedRoute'
-import Layout from './Layout'
+import React from 'react';
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import Layout from './Layout';
+import { ReportDateProvider } from '../../contexts/ReportDateContext';
 
 const ProtectedLayout: React.FC = () => {
-  return (
-    <ProtectedRoute>
-      <Layout>
-        <Outlet />
-      </Layout>
-    </ProtectedRoute>
-  )
-}
+  const { user, isLoading } = useAuth();
 
-export default ProtectedLayout
+  if (isLoading) {
+    // Можно заменить на более красивый спиннер/скелетон
+    return <div className="flex justify-center items-center h-screen">Загрузка...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <ReportDateProvider>
+      <Layout><Outlet /></Layout>
+    </ReportDateProvider>
+  );
+};
+
+export default ProtectedLayout;

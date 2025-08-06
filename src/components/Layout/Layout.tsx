@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import TelegramUpgrade from '../Telegram/TelegramUpgrade'
+import GlobalFilters from './GlobalFilters'
 import { useTelegram } from '../../contexts/TelegramContext'
 
 interface LayoutProps {
@@ -25,6 +26,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Шапка, которая получает функцию для открытия боковой панели */}
         <Header onMenuButtonClick={() => setIsSidebarOpen(true)} />
+
+        {/* Глобальные фильтры (например, дата) */}
+        <GlobalFilters />
         
         {/* Основная область, где будет рендериться дочерний компонент (страница) */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-dark-900 p-4 md:p-6">

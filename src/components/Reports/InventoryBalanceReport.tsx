@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, Download, Calendar } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
+import { useReportDate } from '../../contexts/ReportDateContext'
 import ReportSkeleton from './ReportSkeleton'
 
 interface InventoryBalanceData {
@@ -24,7 +25,7 @@ interface InventoryBalanceData {
 const InventoryBalanceReport: React.FC = () => {
   const [data, setData] = useState<InventoryBalanceData[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
+  const { reportDate } = useReportDate() // Используем глобальную дату
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [isMobile, setIsMobile] = useState(false)
 
@@ -371,16 +372,6 @@ const InventoryBalanceReport: React.FC = () => {
               </button>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <input
-                type="date"
-                value={reportDate}
-                onChange={(e) => setReportDate(e.target.value)}
-                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-
             {/* Mobile Filter */}
             <select
               value={selectedOrgId}
@@ -425,16 +416,6 @@ const InventoryBalanceReport: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-          
           <select
             value={selectedOrgId}
             onChange={(e) => setSelectedOrgId(e.target.value)}

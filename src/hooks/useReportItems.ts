@@ -44,7 +44,6 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           let query = supabase
             .from(tableName)
             .select(`*, report_metadata!inner(id, organization_id, report_date, organizations(name))`)
-            .eq('report_metadata.report_type', reportType)
             .eq('report_metadata.report_date', reportDate);
   
           orderColumns.forEach(order => { query = query.order(order.column, order.options); });
@@ -53,7 +52,13 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           if (itemsError) throw itemsError;
   
           // Фильтрация по организациям, если пользователь не администратор
+          // Фильтрация по организациям, если пользователь не администратор
           let filteredItems = reportItems || [];
+          if (reportItems && !(await isAdminUser())) {
+            filteredItems = reportItems.filter(item =>
+              organizationIds?.includes(item.report_metadata.organization_id)
+            );
+          }
           if (reportItems && !(await isAdminUser())) {
             filteredItems = reportItems.filter(item =>
               organizationIds?.includes(item.report_metadata.organization_id)
