@@ -3,6 +3,7 @@ import OrganizationManagement from '../components/Settings/OrganizationManagemen
 import UserProfileCard from '../components/Settings/UserProfileCard'
 import NotificationSettingsCard from '../components/Settings/NotificationSettingsCard'
 import AppearanceSettingsCard from '../components/Settings/AppearanceSettingsCard'
+import WidgetSettingsCard from '../components/Settings/WidgetSettingsCard'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../contexts/AuthContext'
 import { Organization } from '../types'
@@ -65,6 +66,7 @@ const Settings: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <UserProfileCard selectedOrg={selectedOrg} />
         <NotificationSettingsCard />
+        <WidgetSettingsCard />
         <AppearanceSettingsCard />
         {/* Можно также вынести карточку "Источники данных" в отдельный компонент */}
       </div>
