@@ -1,9 +1,5 @@
 import React from 'react'
-
-interface Organization {
-  id: string
-  name: string
-}
+import { Organization } from '../../types'
 
 interface OrganizationSelectorProps {
   organizations: Organization[]

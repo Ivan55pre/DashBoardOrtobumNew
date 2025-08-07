@@ -1,14 +1,7 @@
 import React from 'react'
 import { Plus, Trash2, Shield, ShieldOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-
-interface Member {
-  member_id: number
-  user_id: string
-  organization_id: string
-  role: 'admin' | 'member'
-  email: string
-}
+import { Member } from '../../types'
 
 interface MemberListProps {
   members: Member[]

@@ -2,27 +2,37 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../contexts/AuthContext'
 import { User } from 'lucide-react'
+import { Organization } from '../../types'
 
-const UserProfileCard: React.FC = () => {
+interface UserProfileCardProps {
+  selectedOrg: Organization | null
+}
+
+const UserProfileCard: React.FC<UserProfileCardProps> = ({ selectedOrg }) => {
   const { user } = useAuth()
   const [organizationRole, setOrganizationRole] = useState<string>('Загрузка...')
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      if (!user) return
+      if (!user || !selectedOrg) {
+        setOrganizationRole(selectedOrg ? 'Загрузка...' : 'Не выбрана')
+        return
+      }
 
-      // TODO: Заменить на получение ID текущей активной организации из контекста
-      // Пока что мы ищем первую организацию, в которой состоит пользователь.
+      setOrganizationRole('Загрузка...')
+
       const { data: memberData, error: memberError } = await supabase
         .from('organization_members')
-        .select('role, organization_id')
+        .select('role')
         .eq('user_id', user.id)
-        .limit(1)
+        .eq('organization_id', selectedOrg.id)
         .single()
 
       if (memberError || !memberData) {
         setOrganizationRole('Не определена')
-        console.error('Error fetching organization role:', memberError)
+        if (memberError && memberError.code !== 'PGRST116') { // PGRST116: "The result contains 0 rows"
+          console.error('Error fetching organization role:', memberError)
+        }
         return
       }
 
@@ -30,7 +40,7 @@ const UserProfileCard: React.FC = () => {
     }
 
     fetchUserRole()
-  }, [user])
+  }, [user, selectedOrg])
 
   return (
     <div className="card p-6">

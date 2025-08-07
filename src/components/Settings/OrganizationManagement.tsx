@@ -4,63 +4,22 @@ import { supabase } from '../../contexts/AuthContext'
 import Modal from '../common/Modal'
 import OrganizationSelector from './OrganizationSelector'
 import MemberList from './MemberList'
+import { Organization, Member } from '../../types'
 
-export interface Organization {
-  id: string
-  name: string
+interface OrganizationManagementProps {
+  organizations: Organization[]
+  selectedOrg: Organization | null
+  onSelectOrg: (id: string | null) => void
+  isOrgsLoading: boolean
 }
 
-interface Member {
-  member_id: number
-  user_id: string
-  organization_id: string
-  role: 'admin' | 'member'
-  email: string
-}
-
-const OrganizationManagement: React.FC = () => {
+const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organizations, selectedOrg, onSelectOrg, isOrgsLoading }) => {
   const { user } = useAuth()
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
   const [members, setMembers] = useState<Member[]>([])
-  const [isOrgsLoading, setIsOrgsLoading] = useState(true)
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [newMemberEmail, setNewMemberEmail] = useState('')
-
-  const fetchOrganizations = useCallback(async () => {
-    if (!user) return
-    setIsOrgsLoading(true)
-    setError(null)
-    try {
-      const { data: orgMembers, error: memberError } = await supabase
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', user.id)
-
-      if (memberError) throw memberError
-
-      if (orgMembers && orgMembers.length > 0) {
-        const orgIds = orgMembers.map(m => m.organization_id)
-        const { data: orgsData, error: orgsError } = await supabase
-          .from('organizations')
-          .select('id, name')
-          .in('id', orgIds)
-
-        if (orgsError) throw orgsError
-
-        setOrganizations(orgsData || [])
-        if (orgsData && orgsData.length > 0 && !selectedOrg) {
-          setSelectedOrg(orgsData[0])
-        }
-      }
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setIsOrgsLoading(false)
-    }
-  }, [user, selectedOrg])
 
   const fetchMembers = useCallback(async () => {
     if (!selectedOrg) return
@@ -81,12 +40,10 @@ const OrganizationManagement: React.FC = () => {
   }, [selectedOrg])
 
   useEffect(() => {
-    fetchOrganizations()
-  }, [fetchOrganizations])
-
-  useEffect(() => {
     if (selectedOrg) {
       fetchMembers()
+    } else {
+      setMembers([]) // Очистить список участников, если организация не выбрана
     }
   }, [selectedOrg, fetchMembers])
 
@@ -152,7 +109,7 @@ const OrganizationManagement: React.FC = () => {
       <OrganizationSelector
         organizations={organizations}
         selectedOrgId={selectedOrg?.id || null}
-        onSelectOrg={(id) => setSelectedOrg(organizations.find(o => o.id === id) || null)}
+        onSelectOrg={onSelectOrg}
         loading={isOrgsLoading}
       />
 
