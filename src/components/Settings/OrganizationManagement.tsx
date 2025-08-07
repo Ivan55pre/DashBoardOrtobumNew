@@ -27,8 +27,6 @@ const OrganizationManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [newMemberEmail, setNewMemberEmail] = useState('')
-  const [showCreateOrgModal, setShowCreateOrgModal] = useState(false)
-  const [newOrgName, setNewOrgName] = useState('')
 
   const fetchOrganizations = useCallback(async () => {
     if (!user) return
@@ -90,30 +88,6 @@ const OrganizationManagement: React.FC = () => {
       fetchMembers()
     }
   }, [selectedOrg, fetchMembers])
-
-  const handleCreateOrganization = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user || !newOrgName.trim()) return;
-    setError(null);
-
-    try {
-      const { data: newOrgId, error } = await supabase.rpc('create_organization_and_add_creator', {
-        p_org_name: newOrgName.trim(),
-      });
-
-      if (error) throw error;
-
-      const newOrg = { id: newOrgId, name: newOrgName.trim() };
-
-      // Обновляем состояние без дополнительного запроса к БД
-      setShowCreateOrgModal(false)
-      setNewOrgName('')
-      setOrganizations(prevOrgs => [...prevOrgs, newOrg]);
-      setSelectedOrg(newOrg);
-    } catch (e: any) {
-      setError(`Ошибка создания организации: ${e.message}`)
-    }
-  }
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -178,7 +152,6 @@ const OrganizationManagement: React.FC = () => {
         organizations={organizations}
         selectedOrgId={selectedOrg?.id || null}
         onSelectOrg={(id) => setSelectedOrg(organizations.find(o => o.id === id) || null)}
-        onCreateOrg={() => setShowCreateOrgModal(true)}
         loading={isOrgsLoading}
       />
 
@@ -208,27 +181,6 @@ const OrganizationManagement: React.FC = () => {
         </Modal>
       )}
 
-      {/* Create Organization Modal */}
-      {showCreateOrgModal && (
-        <Modal title="Создать новую организацию" onClose={() => setShowCreateOrgModal(false)}>
-          <form onSubmit={handleCreateOrganization}>
-            <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название организации</label>
-            <input
-              id="org-name"
-              type="text"
-              value={newOrgName}
-              onChange={(e) => setNewOrgName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Название моей компании"
-              required
-            />
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setShowCreateOrgModal(false)} className="btn-secondary">Отмена</button>
-              <button type="submit" className="btn-primary">Создать</button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   )
 }

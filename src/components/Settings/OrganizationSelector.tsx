@@ -1,5 +1,4 @@
 import React from 'react'
-import { Building } from 'lucide-react'
 
 interface Organization {
   id: string
@@ -10,11 +9,10 @@ interface OrganizationSelectorProps {
   organizations: Organization[]
   selectedOrgId: string | null
   onSelectOrg: (id: string | null) => void
-  onCreateOrg: () => void
   loading: boolean
 }
 
-const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ organizations, selectedOrgId, onSelectOrg, onCreateOrg, loading }) => {
+const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ organizations, selectedOrgId, onSelectOrg, loading }) => {
   return (
     <div className="flex flex-wrap items-center gap-4">
       <div className="flex-grow">
@@ -33,10 +31,6 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ organizatio
           ))}
         </select>
       </div>
-      <button onClick={onCreateOrg} className="btn-secondary flex items-center gap-2">
-        <Building className="w-4 h-4" />
-        Создать организацию
-      </button>
     </div>
   )
 }
