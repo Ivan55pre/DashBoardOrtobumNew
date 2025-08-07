@@ -152,7 +152,7 @@ create index idx_debt_reports_items_level on public.debt_reports_items using btr
 -- 4. Helper Functions for RLS
 
 create or replace function public.is_member_of(p_organization_id uuid, p_user_id uuid)
-returns boolean language sql security definer as $$
+returns boolean language sql security definer stable as $$
   select exists (
     select 1 from public.organization_members om
     where om.organization_id = p_organization_id and om.user_id = p_user_id
@@ -160,7 +160,7 @@ returns boolean language sql security definer as $$
 $$;
 
 create or replace function public.is_admin_of(p_organization_id uuid, p_user_id uuid)
-returns boolean language sql security definer as $$
+returns boolean language sql security definer stable as $$
   select exists (
     select 1 from public.organization_members om
     where om.organization_id = p_organization_id and om.user_id = p_user_id and om.role = 'admin'
@@ -168,7 +168,7 @@ returns boolean language sql security definer as $$
 $$;
 
 create or replace function public.is_organization_empty(p_organization_id uuid)
-returns boolean language sql security definer as $$
+returns boolean language sql security definer stable as $$
   select not exists (select 1 from public.organization_members om where om.organization_id = p_organization_id);
 $$;
 
@@ -294,16 +294,28 @@ for each row execute function public.update_report_metadata_timestamp();
 
 -- 7. Application RPC Functions
 
-create or replace function public.get_organization_members(p_organization_id uuid)
-returns table (member_id bigint, user_id uuid, role text, email text)
-language plpgsql security definer as $$
+ccreate or replace function public.get_organization_members(p_organization_id uuid)
+returns table (
+member_id bigint, 
+user_id uuid, 
+organization_id uuid, 
+role text, 
+email text
+)
+language plpgsql 
+security definer 
+as $$
 begin
     if not public.is_member_of(p_organization_id, auth.uid()) then
         raise exception 'Access denied: You are not a member of this organization.';
     end if;
 
     return query
-    select om.id, om.user_id, om.role, u.email
+    select 
+	om.id, 
+	om.user_id, 
+	om.organization_id, 
+	om.role, u.email
     from public.organization_members om
     join auth.users u on om.user_id = u.id
     where om.organization_id = p_organization_id
