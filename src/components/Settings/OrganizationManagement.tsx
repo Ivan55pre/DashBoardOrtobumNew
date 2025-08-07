@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '../../contexts/AuthContext'
+//import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../contexts/AuthContext'
 import Modal from '../common/Modal'
 import OrganizationSelector from './OrganizationSelector'
