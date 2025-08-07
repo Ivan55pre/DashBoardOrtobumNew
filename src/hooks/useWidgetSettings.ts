@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 export interface WidgetSetting {
   widget_id: string;
   is_visible: boolean;
+  widget_order: number;
 }
 
 export const useWidgetSettings = () => {

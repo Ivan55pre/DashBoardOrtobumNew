@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 interface WidgetSetting {
   widget_id: string;
   is_visible: boolean;
+  widget_order: number;
 }
 
 const WIDGET_DEFINITIONS = [
@@ -51,9 +52,12 @@ const WidgetSettingsCard: React.FC = () => {
       )
     );
 
+    const setting = settings.find(s => s.widget_id === widgetId);
+    const currentOrder = setting ? setting.widget_order : 0; // Fallback, should always exist
+
     const { error } = await supabase
       .from('user_widget_settings')
-      .upsert({ user_id: user.id, widget_id: widgetId, is_visible: isVisible });
+      .upsert({ user_id: user.id, widget_id: widgetId, is_visible: isVisible, widget_order: currentOrder });
 
     if (error) {
       setError('Не удалось сохранить настройки.');
