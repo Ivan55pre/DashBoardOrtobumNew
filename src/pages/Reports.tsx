@@ -3,7 +3,6 @@ import ChartWidget from '../components/Dashboard/ChartWidget'
 import DataTable from '../components/Dashboard/DataTable'
 import InventoryTurnoverReport from '../components/Reports/InventoryTurnoverReport'
 import PlanFactRevenueReport from '../components/Reports/PlanFactRevenueReport'
-import InventoryBalanceReport from '../components/Reports/InventoryBalanceReport'
 import DebtReport from '../components/Reports/DebtReport'
 import CashBankReport from '../components/Reports/CashBankReport'
 import { useAuth } from '../contexts/AuthContext'
@@ -66,7 +65,6 @@ const Reports: React.FC = () => {
       </div>
       
       <div className="grid grid-cols-1 gap-6">
-        <InventoryBalanceReport />
         <PlanFactRevenueReport />
         <InventoryTurnoverReport />
         <DebtReport />
