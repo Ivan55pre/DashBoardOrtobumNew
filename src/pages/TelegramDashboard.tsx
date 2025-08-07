@@ -38,6 +38,7 @@ const TelegramDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>('') // '' means "All", null means error/no orgs
+  const [reportDate, _setReportDate] = useState(new Date().toISOString().split('T')[0])
 
   const loadDemoData = () => {
     const demoData = {
@@ -112,22 +113,40 @@ const TelegramDashboard: React.FC = () => {
           return
         }
 
-        const [cashBankData, debtData, inventoryData, planFactData] = await Promise.all([
-          loadCashBankData(targetOrgIds),
-          loadDebtData(targetOrgIds),
-          loadInventoryData(targetOrgIds),
-          loadPlanFactData(targetOrgIds)
-        ])
-        const newDashboardData = {
-          cashBankTotal: cashBankData.total,
-          debtTotal: debtData.total,
-          inventoryTotal: inventoryData.total,
-          planFactExecution: planFactData.execution,
-          cashBankChange: cashBankData.change,
-          debtChange: debtData.change,
-          inventoryChange: inventoryData.change,
-          planFactChange: planFactData.change
+        const widgetTypes = ['cash_bank', 'debt', 'inventory', 'plan_fact'];
+        const promises = widgetTypes.map(type =>
+          supabase.rpc('get_dashboard_widget_data', {
+            p_widget_type: type,
+            p_report_date: reportDate,
+            p_organization_ids: targetOrgIds,
+          })
+        );
+
+        const [
+          cashBankRes,
+          debtRes,
+          inventoryRes,
+          planFactRes
+        ] = await Promise.all(promises);
+
+        const errors = [cashBankRes.error, debtRes.error, inventoryRes.error, planFactRes.error].filter(Boolean);
+        if (errors.length > 0) {
+          console.error('Error fetching telegram dashboard data:', errors);
+          loadDemoData();
+          return;
         }
+
+        const newDashboardData = {
+          cashBankTotal: cashBankRes.data?.total_balance_current || 0,
+          debtTotal: debtRes.data?.total_debt || 0,
+          inventoryTotal: inventoryRes.data?.total_balance_rub || 0,
+          planFactExecution: planFactRes.data?.overall_execution_percent || 0,
+          // Динамику пока оставляем демо
+          cashBankChange: 5.2,
+          debtChange: -2.1,
+          inventoryChange: 16.42,
+          planFactChange: -8.1
+        };
         setDashboardData(newDashboardData);
       } catch (error) {
         console.error('Error loading dashboard data:', error)
@@ -138,145 +157,7 @@ const TelegramDashboard: React.FC = () => {
     }
 
     loadDashboardData()
-  }, [selectedOrgId, organizations])
-
-  const loadCashBankData = async (organizationIds: string[]) => {
-    try {
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id')
-        .in('organization_id', organizationIds)
-        .eq('report_type', 'cash_bank')
-        .order('report_date', { ascending: false })
-
-      if (metaError) throw metaError
-      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
-
-      const reportIds = reportMeta.map(r => r.id)
-
-      const { data, error } = await supabase
-        .from('cash_bank_report_items')
-        .select('balance_current')
-        .in('report_id', reportIds)
-        .eq('is_total_row', true)
-
-      if (error) throw error
-
-      const total = (data || []).reduce((sum, item) => sum + (item.balance_current || 0), 0)
-
-      return {
-        total: total,
-        change: 5.2 // Динамику пока оставляем демо
-      }
-    } catch (error) {
-      console.error('Error loading cash bank data, using demo data.', error)
-      return { total: 0, change: 0 }
-    }
-  }
-
-  const loadDebtData = async (organizationIds: string[]) => {
-    try {
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id')
-        .in('organization_id', organizationIds)
-        .eq('report_type', 'debt')
-        .order('report_date', { ascending: false })
-
-      if (metaError) throw metaError
-      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
-
-      const reportIds = reportMeta.map(r => r.id)
-
-      const { data, error } = await supabase
-        .from('debt_reports_items')
-        .select('debt_amount')
-        .in('report_id', reportIds)
-        .eq('is_total_row', true)
-
-      if (error) throw error
-
-      const total = (data || []).reduce((sum, item) => sum + (item.debt_amount || 0), 0)
-
-      return {
-        total: total,
-        change: -2.1 // Динамику пока оставляем демо
-      }
-    } catch (error) {
-      console.error('Error loading debt data, using demo data.', error)
-      return { total: 0, change: 0 }
-    }
-  }
-
-  const loadInventoryData = async (organizationIds: string[]) => {
-    try {
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id')
-        .in('organization_id', organizationIds)
-        .eq('report_type', 'inventory_turnover')
-        .order('report_date', { ascending: false })
-
-      if (metaError) throw metaError
-      if (!reportMeta || reportMeta.length === 0) return { total: 0, change: 0 }
-
-      const reportIds = reportMeta.map(r => r.id)
-
-      const { data, error } = await supabase
-        .from('inventory_turnover_report_items')
-        .select('balance_rub')
-        .in('report_id', reportIds)
-        .eq('is_total_row', true)
-
-      if (error) throw error
-
-      const total = (data || []).reduce((sum, item) => sum + (item.balance_rub || 0), 0)
-
-      return {
-        total: total,
-        change: 16.42 // Динамику пока оставляем демо
-      }
-    } catch (error) {
-      console.error('Error loading inventory data, using demo data.', error)
-      return { total: 0, change: 0 }
-    }
-  }
-
-  const loadPlanFactData = async (organizationIds: string[]) => {
-    try {
-      const { data: reportMeta, error: metaError } = await supabase
-        .from('report_metadata')
-        .select('id')
-        .in('organization_id', organizationIds)
-        .eq('report_type', 'plan_fact')
-        .order('report_date', { ascending: false })
-
-      if (metaError) throw metaError
-      if (!reportMeta || reportMeta.length === 0) return { execution: 0, change: 0 }
-
-      const reportIds = reportMeta.map(r => r.id)
-
-      const { data, error } = await supabase
-        .from('plan_fact_reports_items')
-        .select('execution_percent')
-        .in('report_id', reportIds)
-        .eq('period_type', 'month')
-        .eq('is_total_row', true)
-
-      if (error) throw error
-
-      const values = (data || []).map(item => item.execution_percent || 0)
-      const execution = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0
-
-      return {
-        execution: execution,
-        change: -8.1 // Динамику пока оставляем демо
-      }
-    } catch (error) {
-      console.error('Error loading plan-fact data, using demo data.', error)
-      return { execution: 0, change: 0 }
-    }
-  }
+  }, [selectedOrgId, organizations, reportDate])
 
   const handleDesktopRedirect = () => {
     const currentUrl = window.location.href.replace('/telegram-dashboard', '/')
