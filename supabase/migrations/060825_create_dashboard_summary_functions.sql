@@ -10,9 +10,9 @@ DECLARE
 BEGIN
     RETURN QUERY
     SELECT
-        SUM(cbri.balance_current)
+        SUM(cbri.balance_current) AS total_balance_current
     FROM public.cash_bank_report_items AS cbri
-    JOIN public.report_metadata AS rm ON cbri.report_id = rm.id
+    JOIN public.report_metadata AS rm ON itri.report_id = rm.id
     WHERE rm.report_date = p_report_date
       AND cbri.is_total_row = TRUE -- Агрегируем только итоговые строки по каждой организации
       AND rm.organization_id IN (
@@ -32,9 +32,9 @@ DECLARE
 BEGIN
     RETURN QUERY
     SELECT
-        SUM(dri.debt_amount),
-        SUM(dri.overdue_amount),
-        SUM(dri.credit_amount)
+        SUM(dri.debt_amount) AS total_debt,
+        SUM(dri.overdue_amount) AS total_overdue,
+        SUM(dri.credit_amount) AS total_credit
     FROM public.debt_reports_items AS dri
     JOIN public.report_metadata AS rm ON dri.report_id = rm.id
     WHERE rm.report_date = p_report_date
@@ -45,7 +45,7 @@ BEGIN
 END;
 $$;
 
--- Функция для получения сводки по План-Факту для виджета на дашборде.
+-- Функция для получения сводки по план-факту для виджета на дашборде.
 CREATE OR REPLACE FUNCTION public.get_plan_fact_dashboard_summary(p_report_date date)
 RETURNS TABLE(total_plan numeric, total_fact numeric, overall_execution_percent numeric)
 LANGUAGE plpgsql
@@ -70,12 +70,12 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        COALESCE(v_total_plan, 0),
-        COALESCE(v_total_fact, 0),
+        COALESCE(v_total_plan, 0) AS total_plan,
+        COALESCE(v_total_fact, 0) AS total_fact,
         CASE
             WHEN v_total_plan IS NOT NULL AND v_total_plan > 0 THEN (v_total_fact / v_total_plan) * 100
             ELSE 0
-        END;
+        END AS overall_execution_percent;
 END;
 $$;
 
@@ -90,8 +90,8 @@ DECLARE
 BEGIN
     RETURN QUERY
     SELECT
-        SUM(itri.balance_rub),
-        SUM(itri.quantity_pairs)::BIGINT
+        SUM(itri.balance_rub) AS total_balance_rub,
+        SUM(itri.quantity_pairs)::BIGINT AS total_quantity_pairs
     FROM public.inventory_turnover_report_items AS itri
     JOIN public.report_metadata AS rm ON itri.report_id = rm.id
     WHERE rm.report_date = p_report_date
