@@ -31,7 +31,7 @@ const MemberList: React.FC<MemberListProps> = ({ members, onAddMember, onRemoveM
         )}
       </div>
 
-      <div className="overflow-auto max-h-96">
+      <div className="overflow-auto max-h-[70vh]">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-dark-700">
             <tr>
