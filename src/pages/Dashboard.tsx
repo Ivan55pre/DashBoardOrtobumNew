@@ -4,9 +4,26 @@ import DebtWidget from '../components/Dashboard/DebtWidget';
 import PlanFactWidget from '../components/Dashboard/PlanFactWidget';
 import InventoryWidget from '../components/Dashboard/InventoryWidget';
 import { useReportDate } from '../contexts/ReportDateContext';
+import NoOrganizationState from '../components/Layout/NoOrganizationState';
+import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
 
 const Dashboard: React.FC = () => {
   const { reportDate } = useReportDate();
+  const { isLoading, hasOrganizations } = useOrganizationCheck();
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-pulse">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="card h-40 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!hasOrganizations) {
+    return <NoOrganizationState />;
+  }
 
   return (
     <div className="space-y-6">

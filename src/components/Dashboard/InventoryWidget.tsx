@@ -2,32 +2,18 @@ import React from 'react';
 import { Package } from 'lucide-react';
 import DashboardWidget from './DashboardWidget';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { formatCurrency, formatNumber } from '../../utils/formatters';
 
 interface InventorySummary {
   total_balance_rub: number;
   total_quantity_pairs: number;
 }
 
-const formatCurrency = (num: number | null | undefined): string => {
-    if (num === null || num === undefined) return '0 ₽';
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(num);
-};
-
-const formatNumber = (num: number | null | undefined): string => {
-    if (num === null || num === undefined) return '0';
-    return new Intl.NumberFormat('ru-RU').format(num);
-};
-
 const InventoryWidget: React.FC = () => {
-  const { data, isLoading, error } = useDashboardData<InventorySummary>('inventory');
+  const { data, isLoading, error, refetch } = useDashboardData<InventorySummary>('inventory');
 
   return (
-    <DashboardWidget title="Товарные запасы" isLoading={isLoading} error={error}>
+    <DashboardWidget title="Товарные запасы" isLoading={isLoading} error={error} onRetry={refetch}>
       <div className="text-center">
         <Package className="w-12 h-12 text-purple-500 mx-auto mb-4" />
         <p className="text-3xl font-bold text-gray-800 dark:text-white">

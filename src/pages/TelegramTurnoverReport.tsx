@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
 import { useUserOrganizations } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
+import { formatCurrency, formatNumber, formatPercent, getPercentColor } from '../utils/formatters'
 //import { useTelegram } from '../contexts/TelegramContext'
 
 interface InventoryTurnoverData {
@@ -162,28 +163,6 @@ const TelegramTurnoverReport: React.FC = () => {
       newExpanded.add(id)
     }
     setExpandedRows(newExpanded)
-  }
-
-  const formatNumber = (num: number): string => {
-    return new Intl.NumberFormat('ru-RU').format(num)
-  }
-
-  const formatCurrency = (num: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(num) + ' ₽'
-  }
-
-  const formatPercent = (num: number): string => {
-    const sign = num > 0 ? '+' : ''
-    return `${sign}${num.toFixed(1)}%`
-  }
-
-  const getPercentColor = (percent: number): string => {
-    if (percent > 0) return 'text-green-600'
-    if (percent < 0) return 'text-red-600'
-    return 'text-gray-600'
   }
 
   const handleDesktopRedirect = () => {

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 import { useReportDate } from '../../contexts/ReportDateContext'
+import { formatNumber } from '../../utils/formatters'
 import ReportSkeleton from './ReportSkeleton'
 
 interface DebtReportData {
@@ -167,13 +168,6 @@ const DebtReport: React.FC = () => {
     setExpandedRows(newExpanded)
   }
 
-  const formatCurrency = (num: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(num)
-  }
-
   const exportToCSV = () => {
     const headers = [
       'Организация',
@@ -251,17 +245,17 @@ const DebtReport: React.FC = () => {
             <div className="text-right ml-4 flex-shrink-0">
               {item.debt_amount > 0 && (
                 <div className="text-sm font-medium text-gray-900">
-                  Дт: {formatCurrency(item.debt_amount)} ₽
+                  Дт: {formatNumber(item.debt_amount)} ₽
                 </div>
               )}
               {item.overdue_amount > 0 && (
                 <div className="text-xs text-red-600 mt-1">
-                  в т.ч. просроч.: {formatCurrency(item.overdue_amount)} ₽
+                  в т.ч. просроч.: {formatNumber(item.overdue_amount)} ₽
                 </div>
               )}
               {item.credit_amount > 0 && (
                 <div className="text-sm font-medium text-gray-900 mt-1">
-                  Кт: {formatCurrency(item.credit_amount)} ₽
+                  Кт: {formatNumber(item.credit_amount)} ₽
                 </div>
               )}
             </div>
@@ -308,13 +302,13 @@ const DebtReport: React.FC = () => {
             </div>
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
-            {item.debt_amount > 0 ? formatCurrency(item.debt_amount) : ''}
+            {item.debt_amount > 0 ? formatNumber(item.debt_amount) : ''}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white">
-            {item.overdue_amount > 0 ? formatCurrency(item.overdue_amount) : ''}
+            {item.overdue_amount > 0 ? formatNumber(item.overdue_amount) : ''}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
-            {item.credit_amount > 0 ? formatCurrency(item.credit_amount) : ''}
+            {item.credit_amount > 0 ? formatNumber(item.credit_amount) : ''}
           </td>
         </tr>
         {hasChildren && isExpanded && item.children?.map((child) => renderDesktopRow(child))}

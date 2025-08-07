@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { useUserOrganizations } from '../../hooks/useUserOrganizations'
 import { useReportItems } from '../../hooks/useReportItems'
 import { useReportDate } from '../../contexts/ReportDateContext'
+import { formatNumber, formatPercent, getPercentColor } from '../../utils/formatters'
 import ReportSkeleton from './ReportSkeleton'
 
 interface InventoryTurnoverData {
@@ -157,28 +158,6 @@ const InventoryTurnoverReport: React.FC = () => {
     setExpandedRows(newExpanded)
   }
 
-  const formatNumber = (num: number): string => {
-    return new Intl.NumberFormat('ru-RU').format(num)
-  }
-
-  const formatCurrency = (num: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(num)
-  }
-
-  const formatPercent = (num: number): string => {
-    const sign = num > 0 ? '+' : ''
-    return `${sign}${num.toFixed(1)}%`
-  }
-
-  const getPercentColor = (percent: number): string => {
-    if (percent > 0) return 'text-green-600 dark:text-green-400'
-    if (percent < 0) return 'text-red-600 dark:text-red-400'
-    return 'text-gray-600 dark:text-gray-400'
-  }
-
   const exportToCSV = () => {
     const headers = [
       'Организация',
@@ -267,19 +246,19 @@ const InventoryTurnoverReport: React.FC = () => {
             
             <div className="text-right ml-4 flex-shrink-0">
               <div className="text-sm font-medium text-gray-900">
-                {formatCurrency(item.balance_rub)} ₽
+                {formatNumber(item.balance_rub)} ₽
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 С нач. месяца:
               </div>
               <div className={`text-xs font-medium ${getPercentColor(item.dynamics_start_month_percent)}`}>
-                {formatPercent(item.dynamics_start_month_percent)} {formatCurrency(item.dynamics_start_month_rub)} ₽
+                {formatPercent(item.dynamics_start_month_percent)} {formatNumber(item.dynamics_start_month_rub)} ₽
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 С нач. года:
               </div>
               <div className={`text-xs font-medium ${getPercentColor(item.dynamics_start_year_percent)}`}>
-                {formatPercent(item.dynamics_start_year_percent)} {formatCurrency(item.dynamics_start_year_rub)} ₽
+                {formatPercent(item.dynamics_start_year_percent)} {formatNumber(item.dynamics_start_year_rub)} ₽
               </div>
               {item.turnover_days > 0 && (
                 <div className="text-xs text-gray-500 mt-1">
@@ -332,19 +311,19 @@ const InventoryTurnoverReport: React.FC = () => {
             {item.quantity_pairs > 0 ? formatNumber(item.quantity_pairs) : ''}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white font-medium">
-            {formatCurrency(item.balance_rub)}
+            {formatNumber(item.balance_rub)}
           </td>
           <td className={`px-6 py-3 text-sm text-right font-medium ${getPercentColor(item.dynamics_start_month_percent)}`}>
             {formatPercent(item.dynamics_start_month_percent)}
           </td>
           <td className={`px-6 py-3 text-sm text-right ${getPercentColor(item.dynamics_start_month_rub)}`}>
-            {formatCurrency(item.dynamics_start_month_rub)}
+            {formatNumber(item.dynamics_start_month_rub)}
           </td>
           <td className={`px-6 py-3 text-sm text-right font-medium ${getPercentColor(item.dynamics_start_year_percent)}`}>
             {formatPercent(item.dynamics_start_year_percent)}
           </td>
           <td className={`px-6 py-3 text-sm text-right ${getPercentColor(item.dynamics_start_year_rub)}`}>
-            {formatCurrency(item.dynamics_start_year_rub)}
+            {formatNumber(item.dynamics_start_year_rub)}
           </td>
           <td className="px-6 py-3 text-sm text-right text-gray-900 dark:text-white">
             {item.turnover_days > 0 ? item.turnover_days : ''}

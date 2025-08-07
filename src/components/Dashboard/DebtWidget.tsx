@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeftRight } from 'lucide-react';
 import DashboardWidget from './DashboardWidget';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { formatCurrency } from '../../utils/formatters';
 
 interface DebtSummary {
   total_debt: number;
@@ -9,21 +10,11 @@ interface DebtSummary {
   total_credit: number;
 }
 
-const formatCurrency = (num: number | null | undefined): string => {
-    if (num === null || num === undefined) return '0 ₽';
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(num);
-};
-
 const DebtWidget: React.FC = () => {
-  const { data, isLoading, error } = useDashboardData<DebtSummary>('debt');
+  const { data, isLoading, error, refetch } = useDashboardData<DebtSummary>('debt');
 
   return (
-    <DashboardWidget title="Задолженности" isLoading={isLoading} error={error}>
+    <DashboardWidget title="Задолженности" isLoading={isLoading} error={error} onRetry={refetch}>
       <div className="w-full">
         <ArrowLeftRight className="w-12 h-12 text-orange-500 mx-auto mb-4" />
         <div className="space-y-3 text-center">

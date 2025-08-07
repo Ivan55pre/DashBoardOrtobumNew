@@ -3,6 +3,7 @@ import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, 
 import { supabase } from '../contexts/AuthContext'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { useAuth } from '../contexts/AuthContext'
+import { formatCurrency, formatPercent, getPercentColor } from '../utils/formatters'
 //import { useTelegram } from '../contexts/TelegramContext'
 
 interface DashboardData {
@@ -275,24 +276,6 @@ const TelegramDashboard: React.FC = () => {
       console.error('Error loading plan-fact data, using demo data.', error)
       return { execution: 0, change: 0 }
     }
-  }
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount) + ' ₽'
-  }
-
-  const formatPercent = (num: number): string => {
-    const sign = num > 0 ? '+' : ''
-    return `${sign}${num.toFixed(1)}%`
-  }
-
-  const getPercentColor = (percent: number): string => {
-    if (percent > 0) return 'text-green-600'
-    if (percent < 0) return 'text-red-600'
-    return 'text-gray-600'
   }
 
   const handleDesktopRedirect = () => {

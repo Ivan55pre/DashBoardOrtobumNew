@@ -2,26 +2,17 @@ import React from 'react';
 import { Banknote } from 'lucide-react';
 import DashboardWidget from './DashboardWidget';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { formatCurrency } from '../../utils/formatters';
 
 interface CashBankSummary {
   total_balance_current: number;
 }
 
-const formatCurrency = (num: number | null | undefined): string => {
-    if (num === null || num === undefined) return '0 ₽';
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(num);
-};
-
 const CashBankWidget: React.FC = () => {
-  const { data, isLoading, error } = useDashboardData<CashBankSummary>('cash_bank');
+  const { data, isLoading, error, refetch } = useDashboardData<CashBankSummary>('cash_bank');
 
   return (
-    <DashboardWidget title="Денежные средства" isLoading={isLoading} error={error}>
+    <DashboardWidget title="Денежные средства" isLoading={isLoading} error={error} onRetry={refetch}>
       <div className="text-center">
         <Banknote className="w-12 h-12 text-green-500 mx-auto mb-4" />
         <p className="text-3xl font-bold text-gray-800 dark:text-white">
