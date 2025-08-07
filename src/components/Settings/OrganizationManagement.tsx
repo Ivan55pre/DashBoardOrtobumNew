@@ -14,7 +14,7 @@ interface OrganizationManagementProps {
 }
 
 const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organizations, selectedOrg, onSelectOrg, isOrgsLoading }) => {
-  const { user } = useAuth()
+  //const { user } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
