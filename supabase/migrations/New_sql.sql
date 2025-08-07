@@ -294,7 +294,7 @@ for each row execute function public.update_report_metadata_timestamp();
 
 -- 7. Application RPC Functions
 
-ccreate or replace function public.get_organization_members(p_organization_id uuid)
+create or replace function public.get_organization_members(p_organization_id uuid)
 returns table (
 member_id bigint, 
 user_id uuid, 
@@ -311,11 +311,12 @@ begin
     end if;
 
     return query
-    select 
-	om.id, 
-	om.user_id, 
-	om.organization_id, 
-	om.role, u.email
+    select
+        om.id as member_id,
+        om.user_id,
+        om.organization_id,
+        om.role,
+        u.email::text as email
     from public.organization_members om
     join auth.users u on om.user_id = u.id
     where om.organization_id = p_organization_id
