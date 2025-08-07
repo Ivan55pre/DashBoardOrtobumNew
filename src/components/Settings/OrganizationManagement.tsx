@@ -50,6 +50,7 @@ const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organiz
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedOrg || !newMemberEmail.trim()) return
+    setError(null)
 
     try {
       const { error: rpcError } = await supabase.rpc('invite_user_to_organization', {
@@ -70,6 +71,7 @@ const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organiz
   const handleRemoveMember = async (member: Member) => {
     if (!window.confirm(`Вы уверены, что хотите удалить ${member.email} из организации?`)) return
 
+    setError(null)
     try {
       const { error } = await supabase
         .from('organization_members')
@@ -84,6 +86,7 @@ const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organiz
   }
 
   const handleChangeRole = async (member: Member, newRole: 'admin' | 'member') => {
+    setError(null)
     try {
       const { error } = await supabase
         .from('organization_members')
