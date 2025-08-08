@@ -86,7 +86,7 @@ create table public.debt_reports_items (
 -- Plan-fact reports items table
 create table public.plan_fact_reports_items (
   id uuid primary key default gen_random_uuid (),
-  report_id uuid references public.report_metadata (id) on delete cascade,
+  report_id uuid not null references public.report_metadata (id) on delete cascade,
   plan_amount numeric not null,
   fact_amount numeric not null,
   execution_percent numeric not null,
