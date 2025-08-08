@@ -28,9 +28,9 @@ const SortableWidget: React.FC<{
 }> = ({ id, index, moveWidget, saveOrder, children }) => {
   const ref = useRef<HTMLDivElement>(null);
 
-  const [, drop] = useDrop({
+  const [, drop] = useDrop<DragItem>({
     accept: WIDGET_TYPE,
-    hover(item: DragItem, monitor: DropTargetMonitor) {
+    hover(item, monitor) {
       if (!ref.current) return;
       const dragIndex = item.index;
       const hoverIndex = index;
@@ -55,7 +55,7 @@ const SortableWidget: React.FC<{
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-    end: (item, monitor) => {
+    end: (_item, monitor) => {
       // Save order only when the drop is successful
       if (monitor.didDrop()) {
         saveOrder();
