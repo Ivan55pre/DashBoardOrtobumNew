@@ -58,7 +58,7 @@ const SortableWidget: React.FC<{
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-    end: (item, monitor) => {
+    end: (_item, monitor) => {
       if (monitor.didDrop()) {
         onDrop();
       }
