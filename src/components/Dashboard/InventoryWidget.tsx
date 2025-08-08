@@ -49,7 +49,7 @@ const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) =>
     };
 
     fetchData();
-  }, [reportDate, organizationIds]);
+  }, [reportDate, JSON.stringify(organizationIds)]);
 
   const displayValue = formatCurrency(data?.total_balance_rub ?? 0);
 

@@ -48,7 +48,7 @@ const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
     };
 
     fetchData();
-  }, [reportDate, organizationIds]);
+  }, [reportDate, JSON.stringify(organizationIds)]);
 
   const displayValue = `${(data?.overall_execution_percent ?? 0).toFixed(1)}%`;
 

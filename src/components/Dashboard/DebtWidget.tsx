@@ -49,7 +49,7 @@ const DebtWidget: React.FC<DebtWidgetProps> = ({ organizationIds }) => {
     };
 
     fetchData();
-  }, [reportDate, organizationIds]);
+  }, [reportDate, JSON.stringify(organizationIds)]);
 
   const displayValue = formatCurrency(data?.total_debt ?? 0);
 
