@@ -51,16 +51,21 @@ export const useReportItems = <T>({ organizationIds, reportType, reportDate, ord
           const { data: reportItems, error: itemsError } = await query;
           if (itemsError) throw itemsError;
   
-          // Фильтрация по организациям, если пользователь не администратор
+          // Фильтрация по организациям на стороне клиента.
+           // Этот код отфильтрует полученные данные в соответствии с выбором в UI.
           let filteredItems = reportItems || [];
+// был фильтр для всех, кроме админимтратор
+/*
           if (reportItems && !(await isAdminUser())) {
             filteredItems = reportItems.filter(item =>
               organizationIds?.includes(item.report_metadata.organization_id)
+              organizationIds.includes(item.report_metadata.organization_id)
             );
           }
-          if (reportItems && !(await isAdminUser())) {
+*/
+          if (reportItems && organizationIds) {
             filteredItems = reportItems.filter(item =>
-              organizationIds?.includes(item.report_metadata.organization_id)
+              organizationIds.includes(item.report_metadata.organization_id)
             );
           }
   
