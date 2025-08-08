@@ -12,7 +12,7 @@ BEGIN
     SELECT
         SUM(cbri.balance_current) AS total_balance_current
     FROM public.cash_bank_report_items AS cbri
-    JOIN public.report_metadata AS rm ON itri.report_id = rm.id
+    JOIN public.report_metadata AS rm ON cbri.report_id = rm.id
     WHERE rm.report_date = p_report_date
       AND cbri.is_total_row = TRUE -- Агрегируем только итоговые строки по каждой организации
       AND rm.organization_id IN (

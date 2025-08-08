@@ -72,7 +72,7 @@ create table public.inventory_turnover_report_items (
 -- Debt reports items table
 create table public.debt_reports_items (
   id uuid primary key default gen_random_uuid (),
-  report_id uuid references public.report_metadata (id) on delete cascade,
+  report_id uuid not null references public.report_metadata (id) on delete cascade,
   debt_amount numeric not null,
   overdue_amount numeric not null,
   credit_amount numeric not null,

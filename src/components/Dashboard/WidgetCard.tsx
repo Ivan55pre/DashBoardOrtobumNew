@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface WidgetCardProps {
   title: string;
@@ -19,7 +19,6 @@ const WidgetCard: React.FC<WidgetCardProps> = ({ title, icon: Icon, loading, err
     }
     
     const isPositive = changePercent > 0;
-    const isNegative = changePercent < 0;
     const colorClass = isPositive ? 'text-green-500' : 'text-red-500';
     const IconComponent = isPositive ? TrendingUp : TrendingDown;
     const unit = changeType === 'percent' ? '%' : ' п.п.';
