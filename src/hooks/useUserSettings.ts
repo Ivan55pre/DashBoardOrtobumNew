@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../contexts/AuthContext'
 
 // Определяем структуру настроек
 export interface DashboardSettings {
@@ -27,8 +28,7 @@ const defaultSettings: UserSettings = {
 }
 
 export function useUserSettings() {
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  const { user } = useAuth()
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -82,7 +82,7 @@ export function useUserSettings() {
     } finally {
       setLoading(false)
     }
-  }, [user, supabase])
+  }, [user])
 
   useEffect(() => {
     fetchSettings()
@@ -101,7 +101,7 @@ export function useUserSettings() {
       if (error) 
         console.error('Ошибка обновления настроек пользователя:', error)
     },
-    [user, settings, supabase]
+    [user, settings]
   )
 
   return { settings, loading, updateSettings }
