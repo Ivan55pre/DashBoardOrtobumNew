@@ -1,21 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-} from '@dnd-kit/sortable';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDrag, useDrop, DropTargetMonitor } from 'react-dnd';
+import { XYCoord } from 'dnd-core';
 import CashBankWidget from '../components/Dashboard/CashBankWidget';
 import DebtWidget from '../components/Dashboard/DebtWidget';
 import PlanFactWidget from '../components/Dashboard/PlanFactWidget';
@@ -26,14 +11,63 @@ import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
 import { useWidgetSettings, WidgetSetting } from '../hooks/useWidgetSettings';
 import { supabase } from '../contexts/AuthContext';
 
-const SortableWidget: React.FC<{ id: string; children: React.ReactNode }> = ({ id, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+const WIDGET_TYPE = 'WIDGET';
+
+interface DragItem {
+  index: number;
+  id: string;
+  type: string;
+}
+
+const SortableWidget: React.FC<{
+  id: string;
+  index: number;
+  moveWidget: (dragIndex: number, hoverIndex: number) => void;
+  saveOrder: () => void;
+  children: React.ReactNode;
+}> = ({ id, index, moveWidget, saveOrder, children }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  const [, drop] = useDrop({
+    accept: WIDGET_TYPE,
+    hover(item: DragItem, monitor: DropTargetMonitor) {
+      if (!ref.current) return;
+      const dragIndex = item.index;
+      const hoverIndex = index;
+      if (dragIndex === hoverIndex) return;
+
+      const hoverBoundingRect = ref.current?.getBoundingClientRect();
+      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
+      const clientOffset = monitor.getClientOffset();
+      const hoverClientY = (clientOffset as XYCoord).y - hoverBoundingRect.top;
+
+      if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) return;
+      if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) return;
+
+      moveWidget(dragIndex, hoverIndex);
+      item.index = hoverIndex;
+    },
+  });
+
+  const [{ isDragging }, drag] = useDrag({
+    type: WIDGET_TYPE,
+    item: () => ({ id, index }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+    end: (item, monitor) => {
+      // Save order only when the drop is successful
+      if (monitor.didDrop()) {
+        saveOrder();
+      }
+    },
+  });
+
+  const opacity = isDragging ? 0 : 1;
+  drag(drop(ref));
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={ref} style={{ opacity }} className="cursor-move">
       {children}
     </div>
   );
@@ -51,6 +85,7 @@ const Dashboard: React.FC = () => {
   const { isLoading: isOrgCheckLoading, hasOrganizations } = useOrganizationCheck();
   const { settings: initialWidgetSettings, isLoading: areSettingsLoading } = useWidgetSettings();
   const [widgets, setWidgets] = useState<WidgetSetting[]>([]);
+  const widgetsRef = useRef(widgets);
 
   useEffect(() => {
     if (initialWidgetSettings) {
@@ -58,36 +93,37 @@ const Dashboard: React.FC = () => {
     }
   }, [initialWidgetSettings]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  // Keep a ref to the latest widgets state to avoid stale closures in callbacks
+  useEffect(() => {
+    widgetsRef.current = widgets;
+  }, [widgets]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = widgets.findIndex((w) => w.widget_id === active.id);
-      const newIndex = widgets.findIndex((w) => w.widget_id === over.id);
+  const moveWidget = useCallback((dragIndex: number, hoverIndex: number) => {
+    setWidgets((prevWidgets) => {
+      const newWidgets = [...prevWidgets];
+      const [draggedItem] = newWidgets.splice(dragIndex, 1);
+      newWidgets.splice(hoverIndex, 0, draggedItem);
+      return newWidgets;
+    });
+  }, []);
 
-      const newOrder = arrayMove(widgets, oldIndex, newIndex);
-      setWidgets(newOrder); // Optimistic UI update
+  const saveWidgetOrder = useCallback(async () => {
+    const currentWidgets = widgetsRef.current;
+    const payload = currentWidgets.map((widget, index) => ({
+      widget_id: widget.widget_id,
+      order: index,
+    }));
 
-      // Save the new order to the database
-      const payload = newOrder.map((widget, index) => ({
-        widget_id: widget.widget_id,
-        order: index,
-      }));
+    const { error } = await supabase.rpc('save_widget_order', { p_widget_orders: payload });
 
-      const { error } = await supabase.rpc('save_widget_order', { p_widget_orders: payload });
-
-      if (error) {
-        console.error("Failed to save widget order", error);
-        setWidgets(widgets); // Revert on failure
+    if (error) {
+      console.error("Failed to save widget order", error);
+      // Revert on failure by refetching or using initial settings
+      if (initialWidgetSettings) {
+        setWidgets(initialWidgetSettings);
       }
     }
-  };
+  }, [initialWidgetSettings]); // Dependency on initial settings for potential revert
 
   if (isOrgCheckLoading || areSettingsLoading) {
     return (
@@ -115,21 +151,19 @@ const Dashboard: React.FC = () => {
           Данные на {new Date(reportDate + 'T00:00:00').toLocaleDateString('ru-RU')} г.
         </p>
       </div>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={visibleWidgets.map(w => w.widget_id)} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            {visibleWidgets.map((setting) => (
-              <SortableWidget key={setting.widget_id} id={setting.widget_id}>
-                {WIDGET_MAP[setting.widget_id]}
-              </SortableWidget>
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        {visibleWidgets.map((setting, index) => (
+          <SortableWidget
+            key={setting.widget_id}
+            id={setting.widget_id}
+            index={index}
+            moveWidget={moveWidget}
+            saveOrder={saveWidgetOrder}
+          >
+            {WIDGET_MAP[setting.widget_id]}
+          </SortableWidget>
+        ))}
+      </div>
     </div>
   );
 };
