@@ -7,7 +7,7 @@ import DebtWidget from '../components/Dashboard/DebtWidget';
 import PlanFactWidget from '../components/Dashboard/PlanFactWidget';
 import InventoryWidget from '../components/Dashboard/InventoryWidget';
 import { useReportDate } from '../contexts/ReportDateContext';
-import { useOrganization } from '../contexts/OrganizationContext';
+import { useOrganizations } from '../contexts/OrganizationContext';
 import NoOrganizationState from '../components/Layout/NoOrganizationState';
 import { useCashDynamicsData } from '../hooks/useCashDynamicsData';
 import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
@@ -87,7 +87,7 @@ const WIDGET_MAP: Record<string, React.ComponentType<{ organizationIds: string[]
 const Dashboard: React.FC = () => {
   const { reportDate } = useReportDate();
   const { isLoading: isOrgCheckLoading, hasOrganizations } = useOrganizationCheck();
-  const { selectedOrgIds } = useOrganization();
+  const { selectedOrgIds } = useOrganizations();
   const { dateRange } = useReportDate();
 
   const { settings: initialWidgetSettings, isLoading: areSettingsLoading } = useWidgetSettings();
