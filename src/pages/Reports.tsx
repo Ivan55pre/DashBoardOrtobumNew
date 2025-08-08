@@ -26,6 +26,31 @@ const Reports: React.FC = () => {
     return <NoOrganizationState />
   }
 
+  // Пример данных для графиков
+  const salesByCategoryData = {
+    labels: ['Категория 1', 'Категория 2', 'Категория 3', 'Категория 4'],
+    datasets: [
+      {
+        label: 'Продажи, млн ₽',
+        data: [12, 19, 3, 5],
+        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+      },
+    ],
+  };
+
+  const growthDynamicsData = {
+    labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн'],
+    datasets: [
+      {
+        label: 'Рост, %',
+        data: [2.5, 3.1, 4.0, 3.5, 5.1, 4.8],
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        tension: 0.4,
+      },
+    ],
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -33,8 +58,14 @@ const Reports: React.FC = () => {
       </h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartWidget title="Продажи по категориям" type="bar" />
-        <ChartWidget title="Динамика роста" type="line" />
+        <ChartWidget 
+          title="Продажи по категориям" 
+          type="bar" 
+          data={salesByCategoryData} />
+        <ChartWidget 
+          title="Динамика роста" 
+          type="line" 
+          data={growthDynamicsData} />
       </div>
       
       <div className="grid grid-cols-1 gap-6">
