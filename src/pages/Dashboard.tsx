@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { XYCoord } from 'dnd-core';
 import CashBankWidget from '../components/Dashboard/CashBankWidget';
+import CashDynamicsChart from '../components/Dashboard/CashDynamicsChart';
 import DebtWidget from '../components/Dashboard/DebtWidget';
 import PlanFactWidget from '../components/Dashboard/PlanFactWidget';
 import InventoryWidget from '../components/Dashboard/InventoryWidget';
 import { useReportDate } from '../contexts/ReportDateContext';
-import { useOrganizations } from '../contexts/OrganizationContext';
+import { useOrganization } from '../contexts/OrganizationContext';
 import NoOrganizationState from '../components/Layout/NoOrganizationState';
+import { useCashDynamicsData } from '../hooks/useCashDynamicsData';
 import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
 import { useWidgetSettings, WidgetSetting } from '../hooks/useWidgetSettings';
 import { supabase } from '../contexts/AuthContext';
@@ -85,8 +87,8 @@ const WIDGET_MAP: Record<string, React.ComponentType<{ organizationIds: string[]
 const Dashboard: React.FC = () => {
   const { reportDate } = useReportDate();
   const { isLoading: isOrgCheckLoading, hasOrganizations } = useOrganizationCheck();
-  // Get organization filter state from the new context
-  const { getTargetOrgIds } = useOrganizations();
+  const { selectedOrgIds } = useOrganization();
+  const { dateRange } = useReportDate();
 
   const { settings: initialWidgetSettings, isLoading: areSettingsLoading } = useWidgetSettings();
   const [widgets, setWidgets] = useState<WidgetSetting[]>([]);
@@ -130,6 +132,15 @@ const Dashboard: React.FC = () => {
     }
   }, [initialWidgetSettings]); // Dependency on initial settings for potential revert
 
+  const { 
+    data: cashDynamicsData, 
+    isLoading: isCashDynamicsLoading, 
+    error: cashDynamicsError 
+  } = useCashDynamicsData({
+    organizationIds: selectedOrgIds,
+    startDate: dateRange?.from?.toISOString().split('T')[0],
+    endDate: dateRange?.to?.toISOString().split('T')[0],
+  });
   if (isOrgCheckLoading || areSettingsLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-pulse">
@@ -145,9 +156,6 @@ const Dashboard: React.FC = () => {
   }
 
   const visibleWidgets = widgets.filter(setting => setting.is_visible);
-
-  // Determine which organization IDs to pass to widgets using the helper from context
-  const finalOrgIds = getTargetOrgIds();
 
   return (
     <div className="space-y-6">
@@ -170,10 +178,15 @@ const Dashboard: React.FC = () => {
               moveWidget={moveWidget}
               saveOrder={saveWidgetOrder}
             >
-              {WidgetComponent ? <WidgetComponent organizationIds={finalOrgIds} /> : null}
+              {WidgetComponent ? <WidgetComponent organizationIds={selectedOrgIds} /> : null}
             </SortableWidget>
           );
         })}
+      </div>
+
+      {/* График динамики денежных средств */}
+      <div className="mt-6">
+        <CashDynamicsChart data={cashDynamicsData} isLoading={isCashDynamicsLoading} error={cashDynamicsError} />
       </div>
     </div>
   );
