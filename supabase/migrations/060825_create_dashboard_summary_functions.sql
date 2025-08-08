@@ -95,7 +95,7 @@ BEGIN
     FROM public.inventory_turnover_report_items AS itri
     JOIN public.report_metadata AS rm ON itri.report_id = rm.id
     WHERE rm.report_date = p_report_date
-      AND itri.level = 1 -- Предполагаем, что level 1 - это итог по организации
+      AND itri.is_total_row = TRUE -- Агрегируем только итоговые строки по каждой организации
       AND rm.organization_id IN (
           SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = v_user_id
       );

@@ -65,7 +65,8 @@ create table public.inventory_turnover_report_items (
   dynamics_start_year_rub decimal(15, 2),
   dynamics_start_year_percent decimal(5, 2),
   turnover_days integer,
-  level integer
+  level integer,
+  is_total_row boolean default false
 );
 
 -- Debt reports items table
@@ -75,7 +76,7 @@ create table public.debt_reports_items (
   debt_amount numeric not null,
   overdue_amount numeric not null,
   credit_amount numeric not null,
-  is_total_row boolean not null,
+  is_total_row boolean default false not null,
   client_name text not null,
   parent_client_id uuid references public.debt_reports_items (id) on delete set null,
   created_at timestamptz default now(),
@@ -89,7 +90,7 @@ create table public.plan_fact_reports_items (
   plan_amount numeric not null,
   fact_amount numeric not null,
   execution_percent numeric not null,
-  is_total_row boolean not null,
+  is_total_row boolean default false not null,
   created_at timestamptz default now() not null,
   -- Hierarchy and metadata columns
   category_name text,
@@ -439,12 +440,12 @@ begin
         insert into public.inventory_turnover_report_items (
             report_id, category_name, quantity_pairs, balance_rub, dynamics_start_month_rub,
             dynamics_start_month_percent, dynamics_start_year_rub, dynamics_start_year_percent,
-            turnover_days, level
+            turnover_days, level, is_total_row
         ) values (
             v_report_id, item->>'category_name', (item->>'quantity_pairs')::integer, (item->>'balance_rub')::decimal,
             (item->>'dynamics_start_month_rub')::decimal, (item->>'dynamics_start_month_percent')::decimal,
             (item->>'dynamics_start_year_rub')::decimal, (item->>'dynamics_start_year_percent')::decimal,
-            (item->>'turnover_days')::integer, (item->>'level')::integer
+            (item->>'turnover_days')::integer, (item->>'level')::integer, (item->>'is_total_row')::boolean
         ) returning id into v_item_id;
 
         insert into temp_category_map (category_name, item_id) values (item->>'category_name', v_item_id);
