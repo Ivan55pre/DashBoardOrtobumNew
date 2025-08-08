@@ -1,12 +1,16 @@
-import React, { createContext, useState, useContext, ReactNode, useMemo } from 'react'
-import { DateRange } from 'react-day-picker'
+import React, { createContext, useState, useContext, ReactNode, useMemo, Dispatch, SetStateAction } from 'react'
 import { addDays } from 'date-fns'
+
+export interface DateRange {
+  from: Date | undefined
+  to?: Date | undefined
+}
 
 interface ReportDateContextType {
   reportDate: string
   setReportDate: (date: string) => void
   dateRange: DateRange | undefined
-  setDateRange: (range: DateRange | undefined) => void
+  setDateRange: Dispatch<SetStateAction<DateRange | undefined>>
 }
 
 // Создаем контекст с undefined по умолчанию

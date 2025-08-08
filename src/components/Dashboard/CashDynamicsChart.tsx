@@ -43,12 +43,12 @@ const CashDynamicsChart: React.FC<CashDynamicsChartProps> = ({ data, isLoading, 
           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
           <XAxis 
             dataKey="report_day" 
-            tickFormatter={(dateStr) => format(new Date(dateStr), 'dd MMM', { locale: ru })}
+            tickFormatter={(dateStr: string) => format(new Date(dateStr), 'dd MMM', { locale: ru })}
             angle={-45}
             textAnchor="end"
             height={50}
           />
-          <YAxis tickFormatter={(value) => `${formatNumber(value / 1000)}k`} />
+          <YAxis tickFormatter={(value: number) => `${formatNumber(value / 1000)}k`} />
           <Tooltip 
             formatter={(value: number) => [formatNumber(value), 'Баланс']}
             labelFormatter={(label: string) => format(new Date(label), 'd MMMM yyyy', { locale: ru })}

@@ -1,7 +1,6 @@
 import React from 'react'
 import { useLocation } from 'react-router-dom'
 import { format } from 'date-fns'
-import { ru } from 'date-fns/locale'
 import { useReportDate } from '../../contexts/ReportDateContext'
 import OrganizationFilter from './OrganizationFilter'
 
