@@ -50,7 +50,7 @@ const DebtWidget: React.FC<DebtWidgetProps> = ({ organizationIds }) => {
     fetchData();
   }, [reportDate, organizationIds]);
 
-  const displayValue = data ? formatCurrency(data.total_debt) : '0 ₽';
+  const displayValue = formatCurrency(data?.total_debt ?? 0);
 
   return (
     <WidgetCard title="Задолженности" icon={CreditCard} loading={loading} error={error}>

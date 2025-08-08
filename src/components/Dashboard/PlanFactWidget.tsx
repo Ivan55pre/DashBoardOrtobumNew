@@ -49,7 +49,7 @@ const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
     fetchData();
   }, [reportDate, organizationIds]);
 
-  const displayValue = data ? `${data.overall_execution_percent.toFixed(1)}%` : '0%';
+  const displayValue = `${(data?.overall_execution_percent ?? 0).toFixed(1)}%`;
 
   return (
     <WidgetCard title="Выручка план-факт" icon={BarChart3} loading={loading} error={error}>

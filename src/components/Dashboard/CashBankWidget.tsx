@@ -50,7 +50,7 @@ const CashBankWidget: React.FC<CashBankWidgetProps> = ({ organizationIds }) => {
     fetchData();
   }, [reportDate, organizationIds]);
 
-  const displayValue = data ? formatCurrency(data.total_balance_current) : '0 ₽';
+  const displayValue = formatCurrency(data?.total_balance_current ?? 0);
 
   return (
     <WidgetCard

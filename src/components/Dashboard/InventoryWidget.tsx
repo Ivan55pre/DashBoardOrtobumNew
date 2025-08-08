@@ -50,7 +50,7 @@ const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) =>
     fetchData();
   }, [reportDate, organizationIds]);
 
-  const displayValue = data ? formatCurrency(data.total_balance_rub) : '0 ₽';
+  const displayValue = formatCurrency(data?.total_balance_rub ?? 0);
 
   return (
     <WidgetCard title="Товарные запасы" icon={Package} loading={loading} error={error}>
