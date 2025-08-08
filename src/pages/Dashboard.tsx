@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useDrag, useDrop, DropTargetMonitor } from 'react-dnd';
+import { useDrag, useDrop } from 'react-dnd';
 import { XYCoord } from 'dnd-core';
 import CashBankWidget from '../components/Dashboard/CashBankWidget';
 import DebtWidget from '../components/Dashboard/DebtWidget';
