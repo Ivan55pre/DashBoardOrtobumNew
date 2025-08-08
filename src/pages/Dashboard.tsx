@@ -6,6 +6,7 @@ import DebtWidget from '../components/Dashboard/DebtWidget';
 import PlanFactWidget from '../components/Dashboard/PlanFactWidget';
 import InventoryWidget from '../components/Dashboard/InventoryWidget';
 import { useReportDate } from '../contexts/ReportDateContext';
+import { useOrganizations } from '../contexts/OrganizationContext';
 import NoOrganizationState from '../components/Layout/NoOrganizationState';
 import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
 import { useWidgetSettings, WidgetSetting } from '../hooks/useWidgetSettings';
@@ -73,16 +74,20 @@ const SortableWidget: React.FC<{
   );
 };
 
-const WIDGET_MAP: Record<string, React.ReactNode> = {
-  cash_bank: <CashBankWidget />,
-  debt: <DebtWidget />,
-  plan_fact: <PlanFactWidget />,
-  inventory: <InventoryWidget />,
+// Changed to a map of components to allow passing props like organizationIds
+const WIDGET_MAP: Record<string, React.ComponentType<{ organizationIds: string[] }>> = {
+  cash_bank: CashBankWidget,
+  debt: DebtWidget,
+  plan_fact: PlanFactWidget,
+  inventory: InventoryWidget,
 };
 
 const Dashboard: React.FC = () => {
   const { reportDate } = useReportDate();
   const { isLoading: isOrgCheckLoading, hasOrganizations } = useOrganizationCheck();
+  // Get organization filter state from the new context
+  const { getTargetOrgIds } = useOrganizations();
+
   const { settings: initialWidgetSettings, isLoading: areSettingsLoading } = useWidgetSettings();
   const [widgets, setWidgets] = useState<WidgetSetting[]>([]);
   const widgetsRef = useRef(widgets);
@@ -141,6 +146,9 @@ const Dashboard: React.FC = () => {
 
   const visibleWidgets = widgets.filter(setting => setting.is_visible);
 
+  // Determine which organization IDs to pass to widgets using the helper from context
+  const finalOrgIds = getTargetOrgIds();
+
   return (
     <div className="space-y-6">
       <div>
@@ -152,17 +160,20 @@ const Dashboard: React.FC = () => {
         </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {visibleWidgets.map((setting, index) => (
-          <SortableWidget
-            key={setting.widget_id}
-            id={setting.widget_id}
-            index={index}
-            moveWidget={moveWidget}
-            saveOrder={saveWidgetOrder}
-          >
-            {WIDGET_MAP[setting.widget_id]}
-          </SortableWidget>
-        ))}
+        {visibleWidgets.map((setting, index) => {
+          const WidgetComponent = WIDGET_MAP[setting.widget_id];
+          return (
+            <SortableWidget
+              key={setting.widget_id}
+              id={setting.widget_id}
+              index={index}
+              moveWidget={moveWidget}
+              saveOrder={saveWidgetOrder}
+            >
+              {WidgetComponent ? <WidgetComponent organizationIds={finalOrgIds} /> : null}
+            </SortableWidget>
+          );
+        })}
       </div>
     </div>
   );
