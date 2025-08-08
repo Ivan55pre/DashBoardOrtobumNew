@@ -15,6 +15,9 @@ import { useOrganizationCheck } from '../hooks/useOrganizationCheck';
 import { useUserSettings } from '../hooks/useUserSettings';
 
 const WIDGET_TYPE = 'WIDGET';
+const KPI_WIDGET_IDS = ['cash_bank', 'debt', 'plan_fact', 'inventory'];
+const FULL_WIDTH_WIDGET_IDS = ['cash_dynamics_chart'];
+
 
 interface DragItem {
   index: number;
@@ -156,7 +159,8 @@ const Dashboard: React.FC = () => {
   }
 
   const { widgetVisibility } = settings.dashboard;
-  const visibleWidgetIds = localWidgetOrder.filter(id => widgetVisibility[id]);
+  const visibleKpiWidgetIds = localWidgetOrder.filter(id => KPI_WIDGET_IDS.includes(id) && widgetVisibility[id]);
+  const visibleFullWidthWidgetIds = localWidgetOrder.filter(id => FULL_WIDTH_WIDGET_IDS.includes(id) && widgetVisibility[id]);
 
   return (
     <div className="space-y-6">
@@ -186,19 +190,38 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {visibleWidgetIds.map(widgetId => {
+      {/* KPI Widgets Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        {visibleKpiWidgetIds.map((widgetId) => {
           const WidgetComponent = WIDGET_COMPONENTS[widgetId];
           if (!WidgetComponent) return null;
 
           const index = localWidgetOrder.findIndex(id => id === widgetId);
 
-          let widgetProps: any = {};
-          if (widgetId === 'cash_dynamics_chart') {
-            widgetProps = { data: cashDynamicsData, isLoading: isCashDynamicsLoading, error: cashDynamicsError };
-          } else {
-            widgetProps = { organizationIds: selectedOrgIds };
-          }
+          return (
+            <SortableWidget
+              key={widgetId}
+              id={widgetId}
+              index={index}
+              moveWidget={moveWidget}
+              onDrop={handleDrop}
+            >
+              <WidgetComponent organizationIds={selectedOrgIds} />
+            </SortableWidget>
+          );
+        })}
+      </div>
+
+      {/* Full-width Widgets Section */}
+      <div className="space-y-6">
+        {visibleFullWidthWidgetIds.map(widgetId => {
+          const WidgetComponent = WIDGET_COMPONENTS[widgetId];
+          if (!WidgetComponent) return null;
+
+          const index = localWidgetOrder.findIndex(id => id === widgetId);
+
+          // Props specifically for the cash dynamics chart
+          const widgetProps = { data: cashDynamicsData, isLoading: isCashDynamicsLoading, error: cashDynamicsError };
 
           return (
             <SortableWidget
