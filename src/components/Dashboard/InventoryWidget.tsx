@@ -11,6 +11,7 @@ interface InventoryWidgetProps {
 
 interface WidgetData {
   total_balance_rub: number;
+  change_percent: number;
 }
 
 const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) => {
@@ -22,7 +23,7 @@ const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) =>
   useEffect(() => {
     const fetchData = async () => {
       if (!reportDate || organizationIds.length === 0) {
-        setData({ total_balance_rub: 0 });
+        setData({ total_balance_rub: 0, change_percent: 0 });
         setLoading(false);
         return;
       }
@@ -53,7 +54,13 @@ const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) =>
   const displayValue = formatCurrency(data?.total_balance_rub ?? 0);
 
   return (
-    <WidgetCard title="Товарные запасы" icon={Package} loading={loading} error={error}>
+    <WidgetCard
+      title="Товарные запасы"
+      icon={Package}
+      loading={loading}
+      error={error}
+      changePercent={data?.change_percent}
+    >
       <div className="text-3xl font-bold text-gray-900 dark:text-white">
         {displayValue}
       </div>

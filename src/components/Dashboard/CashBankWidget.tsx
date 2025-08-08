@@ -11,6 +11,7 @@ interface CashBankWidgetProps {
 
 interface WidgetData {
   total_balance_current: number;
+  change_percent: number;
 }
 
 const CashBankWidget: React.FC<CashBankWidgetProps> = ({ organizationIds }) => {
@@ -22,7 +23,7 @@ const CashBankWidget: React.FC<CashBankWidgetProps> = ({ organizationIds }) => {
   useEffect(() => {
     const fetchData = async () => {
       if (!reportDate || organizationIds.length === 0) {
-        setData({ total_balance_current: 0 });
+        setData({ total_balance_current: 0, change_percent: 0 });
         setLoading(false);
         return;
       }
@@ -54,10 +55,11 @@ const CashBankWidget: React.FC<CashBankWidgetProps> = ({ organizationIds }) => {
 
   return (
     <WidgetCard
-      title="Денежные средства"
+      title="Остатки на РС и кассе"
       icon={Banknote}
       loading={loading}
       error={error}
+      changePercent={data?.change_percent}
     >
       <div className="text-3xl font-bold text-gray-900 dark:text-white">
         {displayValue}

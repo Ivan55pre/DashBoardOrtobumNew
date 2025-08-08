@@ -11,6 +11,7 @@ interface DebtWidgetProps {
 
 interface WidgetData {
   total_debt: number;
+  change_percent: number;
 }
 
 const DebtWidget: React.FC<DebtWidgetProps> = ({ organizationIds }) => {
@@ -22,7 +23,7 @@ const DebtWidget: React.FC<DebtWidgetProps> = ({ organizationIds }) => {
   useEffect(() => {
     const fetchData = async () => {
       if (!reportDate || organizationIds.length === 0) {
-        setData({ total_debt: 0 });
+        setData({ total_debt: 0, change_percent: 0 });
         setLoading(false);
         return;
       }
@@ -53,7 +54,13 @@ const DebtWidget: React.FC<DebtWidgetProps> = ({ organizationIds }) => {
   const displayValue = formatCurrency(data?.total_debt ?? 0);
 
   return (
-    <WidgetCard title="Задолженности" icon={CreditCard} loading={loading} error={error}>
+    <WidgetCard
+      title="Задолженности"
+      icon={CreditCard}
+      loading={loading}
+      error={error}
+      changePercent={data?.change_percent}
+    >
       <div className="text-3xl font-bold text-gray-900 dark:text-white">
         {displayValue}
       </div>

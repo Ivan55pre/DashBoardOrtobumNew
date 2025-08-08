@@ -10,6 +10,7 @@ interface PlanFactWidgetProps {
 
 interface WidgetData {
   overall_execution_percent: number;
+  change_percent: number; // This is change in percentage points (p.p.)
 }
 
 const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
@@ -21,7 +22,7 @@ const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
   useEffect(() => {
     const fetchData = async () => {
       if (!reportDate || organizationIds.length === 0) {
-        setData({ overall_execution_percent: 0 });
+        setData({ overall_execution_percent: 0, change_percent: 0 });
         setLoading(false);
         return;
       }
@@ -52,7 +53,14 @@ const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
   const displayValue = `${(data?.overall_execution_percent ?? 0).toFixed(1)}%`;
 
   return (
-    <WidgetCard title="Выручка план-факт" icon={BarChart3} loading={loading} error={error}>
+    <WidgetCard
+      title="Выручка план-факт"
+      icon={BarChart3}
+      loading={loading}
+      error={error}
+      changePercent={data?.change_percent}
+      changeType="p.p."
+    >
       <div className="text-3xl font-bold text-gray-900 dark:text-white">
         {displayValue}
       </div>
