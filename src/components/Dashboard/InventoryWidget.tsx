@@ -1,29 +1,63 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../contexts/AuthContext';
+import { useReportDate } from '../../contexts/ReportDateContext';
+import { formatCurrency } from '../../utils/formatters';
+import WidgetCard from './WidgetCard';
 import { Package } from 'lucide-react';
-import DashboardWidget from './DashboardWidget';
-import { useDashboardData } from '../../hooks/useDashboardData';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
 
-interface InventorySummary {
-  total_balance_rub: number;
-  total_quantity_pairs: number;
+interface InventoryWidgetProps {
+  organizationIds: string[];
 }
 
-const InventoryWidget: React.FC = () => {
-  const { data, isLoading, error, refetch } = useDashboardData<InventorySummary>('inventory');
+interface WidgetData {
+  total_balance_rub: number;
+}
+
+const InventoryWidget: React.FC<InventoryWidgetProps> = ({ organizationIds }) => {
+  const { reportDate } = useReportDate();
+  const [data, setData] = useState<WidgetData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!reportDate || organizationIds.length === 0) {
+        setData({ total_balance_rub: 0 });
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_widget_data', {
+        p_widget_type: 'inventory',
+        p_report_date: reportDate,
+        p_organization_ids: organizationIds,
+      });
+
+      if (rpcError) {
+        console.error('Error fetching inventory widget data:', rpcError);
+        setError('Ошибка загрузки');
+        setData(null);
+      } else {
+        setData(rpcData);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [reportDate, organizationIds]);
+
+  const displayValue = data ? formatCurrency(data.total_balance_rub) : '0 ₽';
 
   return (
-    <DashboardWidget title="Товарные запасы" isLoading={isLoading} error={error} onRetry={refetch}>
-      <div className="text-center">
-        <Package className="w-12 h-12 text-purple-500 mx-auto mb-4" />
-        <p className="text-3xl font-bold text-gray-800 dark:text-white">
-          {formatCurrency(data?.total_balance_rub)}
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {formatNumber(data?.total_quantity_pairs)} пар
-        </p>
+    <WidgetCard title="Товарные запасы" icon={Package} loading={loading} error={error}>
+      <div className="text-3xl font-bold text-gray-900 dark:text-white">
+        {displayValue}
       </div>
-    </DashboardWidget>
+    </WidgetCard>
   );
 };
 

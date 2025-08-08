@@ -1,37 +1,62 @@
-import React from 'react';
-import { Target } from 'lucide-react';
-import DashboardWidget from './DashboardWidget';
-import { useDashboardData } from '../../hooks/useDashboardData';
-import { formatCurrency } from '../../utils/formatters';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../contexts/AuthContext';
+import { useReportDate } from '../../contexts/ReportDateContext';
+import WidgetCard from './WidgetCard';
+import { BarChart3 } from 'lucide-react';
 
-interface PlanFactSummary {
-  total_plan: number;
-  total_fact: number;
+interface PlanFactWidgetProps {
+  organizationIds: string[];
+}
+
+interface WidgetData {
   overall_execution_percent: number;
 }
 
-const getPercentColor = (percent: number | null | undefined): string => {
-    if (percent === null || percent === undefined) return 'text-gray-800 dark:text-white';
-    if (percent >= 100) return 'text-green-500';
-    if (percent >= 80) return 'text-yellow-500';
-    return 'text-red-500';
-};
+const PlanFactWidget: React.FC<PlanFactWidgetProps> = ({ organizationIds }) => {
+  const { reportDate } = useReportDate();
+  const [data, setData] = useState<WidgetData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-const PlanFactWidget: React.FC = () => {
-  const { data, isLoading, error, refetch } = useDashboardData<PlanFactSummary>('plan_fact');
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!reportDate || organizationIds.length === 0) {
+        setData({ overall_execution_percent: 0 });
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_widget_data', {
+        p_widget_type: 'plan_fact',
+        p_report_date: reportDate,
+        p_organization_ids: organizationIds,
+      });
+
+      if (rpcError) {
+        console.error('Error fetching plan/fact widget data:', rpcError);
+        setError('Ошибка загрузки');
+        setData(null);
+      } else {
+        setData(rpcData);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [reportDate, organizationIds]);
+
+  const displayValue = data ? `${data.overall_execution_percent.toFixed(1)}%` : '0%';
 
   return (
-    <DashboardWidget title="План-факт выручки" isLoading={isLoading} error={error} onRetry={refetch}>
-      <div className="text-center">
-        <Target className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-        <p className={`text-3xl font-bold ${getPercentColor(data?.overall_execution_percent)}`}>
-          {data?.overall_execution_percent?.toFixed(1) ?? '0.0'}%
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-          Факт: {formatCurrency(data?.total_fact)} / План: {formatCurrency(data?.total_plan)}
-        </p>
+    <WidgetCard title="Выручка план-факт" icon={BarChart3} loading={loading} error={error}>
+      <div className="text-3xl font-bold text-gray-900 dark:text-white">
+        {displayValue}
       </div>
-    </DashboardWidget>
+    </WidgetCard>
   );
 };
 

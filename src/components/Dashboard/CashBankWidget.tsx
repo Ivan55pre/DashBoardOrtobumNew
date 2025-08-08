@@ -1,28 +1,68 @@
-import React from 'react';
-import { Banknote } from 'lucide-react';
-import DashboardWidget from './DashboardWidget';
-import { useDashboardData } from '../../hooks/useDashboardData';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../contexts/AuthContext';
+import { useReportDate } from '../../contexts/ReportDateContext';
 import { formatCurrency } from '../../utils/formatters';
+import WidgetCard from './WidgetCard';
+import { Banknote } from 'lucide-react';
 
-interface CashBankSummary {
+interface CashBankWidgetProps {
+  organizationIds: string[];
+}
+
+interface WidgetData {
   total_balance_current: number;
 }
 
-const CashBankWidget: React.FC = () => {
-  const { data, isLoading, error, refetch } = useDashboardData<CashBankSummary>('cash_bank');
+const CashBankWidget: React.FC<CashBankWidgetProps> = ({ organizationIds }) => {
+  const { reportDate } = useReportDate();
+  const [data, setData] = useState<WidgetData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!reportDate || organizationIds.length === 0) {
+        setData({ total_balance_current: 0 });
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_widget_data', {
+        p_widget_type: 'cash_bank',
+        p_report_date: reportDate,
+        p_organization_ids: organizationIds,
+      });
+
+      if (rpcError) {
+        console.error('Error fetching cash/bank widget data:', rpcError);
+        setError('Ошибка загрузки');
+        setData(null);
+      } else {
+        setData(rpcData);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [reportDate, organizationIds]);
+
+  const displayValue = data ? formatCurrency(data.total_balance_current) : '0 ₽';
 
   return (
-    <DashboardWidget title="Денежные средства" isLoading={isLoading} error={error} onRetry={refetch}>
-      <div className="text-center">
-        <Banknote className="w-12 h-12 text-green-500 mx-auto mb-4" />
-        <p className="text-3xl font-bold text-gray-800 dark:text-white">
-          {formatCurrency(data?.total_balance_current)}
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Общий остаток
-        </p>
+    <WidgetCard
+      title="Денежные средства"
+      icon={Banknote}
+      loading={loading}
+      error={error}
+    >
+      <div className="text-3xl font-bold text-gray-900 dark:text-white">
+        {displayValue}
       </div>
-    </DashboardWidget>
+    </WidgetCard>
   );
 };
 
