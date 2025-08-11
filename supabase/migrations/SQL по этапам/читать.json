@@ -1,0 +1,25 @@
+0001_extensions.sql — расширения pgcrypto, vector.
+
+0002_core_tables.sql — все базовые таблицы (org, members, report_metadata, *_report_items, *_monthly_summaries).
+
+0003_indexes.sql — индексы для debt_reports_items.
+
+0004_rls_helpers.sql — функции is_member_of, is_admin_of, is_organization_empty, is_last_admin_in_organization.
+
+0005_rls_policies.sql — включение RLS и все политики для таблиц.
+
+0006_triggers.sql — триггеры (первый участник = admin, обновление updated_at в report_metadata).
+
+0007_user_widget_settings.sql — таблица настроек виджетов, RLS, триггер, get_user_widget_settings, save_widget_order.
+
+0008_rpc_and_aux_tables.sql — RPC по организациям, RAG-таблицы (documents + match_documents), журнал чата.
+
+0009_dashboard_summaries.sql — сводки по дашборду: cash_bank, debt, plan_fact, inventory.
+
+0010_cash_flow_dynamics.sql — функция динамики по дням.
+
+0011_upsert_reports.sql — upsert-функции для трёх типов отчётов.
+
+0012_dashboard_widget_data.sql — агрегатор для виджетов; для inventory маппит на inventory_turnover.
+
+0013_compat_fixups_safe.sql — безопасные фиксы FK/NOT NULL для частично созданных БД (на чистой — не навредит).

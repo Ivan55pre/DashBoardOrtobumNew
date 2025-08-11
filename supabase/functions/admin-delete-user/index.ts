@@ -1,113 +1,119 @@
+// index.admin-delete-user.ts
+// Edge-функция для удаления пользователя из организации (и, опционально, из Auth)
+// Использует SQL-RPC remove_user_from_organization(p_organization_id, p_user_email)
+// Требуется переменные окружения:
+//  - SUPABASE_URL
+//  - SUPABASE_SERVICE_ROLE_KEY
+//  - FUNCTION_API_KEY
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
-/**
- * @file Edge-функция Supabase для административного удаления пользователя.
- *
- * Эта функция позволяет безопасно удалить пользователя из системы, используя
- * привилегированный ключ. Она предназначена для вызова из доверенной среды,
- * например, из другой серверной службы или панели администратора.
- *
- * @requires_environment_variables
- * - `SUPABASE_URL`: URL вашего проекта Supabase.
- * - `SUPABASE_SERVICE_ROLE_KEY`: Ключ с ролью `service_role` для выполнения привилегированных операций.
- *
- * @request_body
- * @property {string} user_id - UUID пользователя, которого необходимо удалить.
- *
- * @returns {Response} JSON-ответ, указывающий на успех или неудачу операции.
- */
+const corsHeaders: HeadersInit = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+};
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+type Payload = {
+  organization_name: string;
+  user_email: string;
+  delete_from_auth?: boolean;
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders },
+  });
 }
 
-Deno.serve(async (req) => {
-  // Обработка CORS preflight-запроса
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return json({ error: "Метод не поддерживается" }, 405);
   }
 
   try {
-    // 1. ПРОВЕРКА БЕЗОПАСНОСТИ
-    //const authHeader = req.headers.get('Authorization')
-    //const n8nSecret = Deno.env.get('N8N_SECRET_TOKEN')
-
-    //console.log('n8nSecret:', n8nSecret);    
-    //if (!n8nSecret) {
-    //  console.error('N8N_SECRET_TOKEN environment variable not set.')
-    //  return new Response(JSON.stringify({ error: 'Server configuration error.' }), {
-    //    status: 500,
-    //    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    //  })
-    //}
-
-    //if (authHeader !== `Bearer ${n8nSecret}`) {
-    //  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    //    status: 401,
-    //    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    //  })
-    //}
-       // Шаг : Проверка безопасности с помощью API-ключа в параметрах URL.
-    const url = new URL(req.url)
-    const apiKey = url.searchParams.get('apiKey')
-    const serverApiKey = Deno.env.get('FUNCTION_API_KEY') // Рекомендуется использовать отдельную переменную окружения
-
-    if (!serverApiKey) {
-      console.error('FUNCTION_API_KEY environment variable not set.')
-      return new Response(JSON.stringify({ error: 'Server configuration error.' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    // 1) Проверка API-ключа
+    const apiKeyHeader = req.headers.get("x-api-key");
+    const functionKey = Deno.env.get("FUNCTION_API_KEY");
+    if (!functionKey || apiKeyHeader !== functionKey) {
+      return json({ error: "Доступ запрещён" }, 403);
     }
 
-    if (apiKey !== serverApiKey) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing API Key' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    // 2) Валидация входа
+    const payload = (await req.json().catch(() => null)) as Payload | null;
+    if (!payload) return json({ error: "Некорректный JSON" }, 400);
+
+    const { organization_name, user_email, delete_from_auth } = payload;
+    if (!organization_name || organization_name.trim().length < 2) {
+      return json({ error: "organization_name обязателен и должен быть не короче 2 символов" }, 400);
+    }
+    if (!user_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user_email)) {
+      return json({ error: "Укажите корректный user_email" }, 400);
     }
 
+    // 3) Подключение Supabase (Service Role)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ error: "Не заданы переменные окружения SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY" }, 500);
+    }
+    const sb = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // Шаг 1: Получение ID пользователя из тела запроса
-    const { user_id } = await req.json()
+    // 4) Получаем ID организации
+    const { data: orgData, error: orgErr } = await sb
+      .from("organizations")
+      .select("id")
+      .eq("name", organization_name)
+      .maybeSingle();
+    if (orgErr) {
+      console.error("Ошибка чтения organizations:", orgErr);
+      return json({ error: "Ошибка поиска организации" }, 500);
+    }
+    if (!orgData?.id) {
+      return json({ error: `Организация "${organization_name}" не найдена` }, 404);
+    }
+    const orgId = orgData.id;
 
-    if (!user_id) {
-      return new Response(JSON.stringify({ error: "Параметр 'user_id' обязателен." }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      })
+    // 5) Вызываем RPC для удаления
+    const { error: rpcErr } = await sb.rpc("remove_user_from_organization", {
+      p_organization_id: orgId,
+      p_user_email: user_email,
+    });
+    if (rpcErr) {
+      console.error("RPC remove_user_from_organization error:", rpcErr);
+      return json({ error: "Не удалось удалить пользователя из организации" }, 400);
     }
 
-    // Шаг 2: Создание админского клиента Supabase для выполнения привилегированных операций
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    // Шаг 3: Вызов административного метода для удаления пользователя
-    const { data, error } = await supabaseAdmin.auth.admin.deleteUser(user_id)
-
-    if (error) {
-      // Если Supabase вернул ошибку (например, пользователь не найден).
-      return new Response(JSON.stringify({ error: error.message }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      })
+    // 6) Опционально — удаляем пользователя из Auth
+    if (delete_from_auth) {
+      const { data: userData, error: getUserErr } = await sb.auth.admin.getUserByEmail(user_email);
+      if (getUserErr || !userData?.user) {
+        console.warn("Пользователь в Auth не найден:", getUserErr);
+      } else {
+        const { error: delErr } = await sb.auth.admin.deleteUser(userData.user.id);
+        if (delErr) {
+          console.error("Ошибка удаления пользователя из Auth:", delErr);
+          return json({ error: "Пользователь удалён из организации, но не из Auth" }, 500);
+        }
+      }
     }
 
-    // Шаг 4: В случае успеха возвращаем подтверждение
-    return new Response(JSON.stringify({ message: `Пользователь ${user_id} успешно удален.` }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
-
-  } catch (error) {
-    // Обработка непредвиденных ошибок (например, невалидный JSON в теле запроса)
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    })
+    // 7) Ответ
+    return json({
+      ok: true,
+      organization_id: orgId,
+      user_email,
+      message: delete_from_auth
+        ? `Пользователь удалён из "${organization_name}" и из Auth`
+        : `Пользователь удалён из "${organization_name}"`,
+    });
+  } catch (err) {
+    console.error("Unhandled error:", err);
+    return json({ error: "Внутренняя ошибка сервера" }, 500);
   }
-})
+});
