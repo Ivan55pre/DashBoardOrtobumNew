@@ -4,19 +4,20 @@ import { useAuth } from './AuthContext';
 import { Organization } from '../types';
 
 interface OrganizationContextType {
-  allOrganizations: Organization[];
-  selectedOrganizationIds: string[];
-  setSelectedOrganizationIds: (ids: string[]) => void;
+  organizations: Organization[];
+  selectedOrgIds: string[];
+  setSelectedOrgIds: (ids: string[]) => void;
   isLoading: boolean;
   error: string | null;
+  isAllSelected: boolean;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
 
 export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
-  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,13 +52,13 @@ export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ childr
           if (orgsError) throw orgsError;
 
           const fetchedOrgs = orgsData || [];
-          setAllOrganizations(fetchedOrgs);
+          setOrganizations(fetchedOrgs);
 
           // 3. ГЛАВНОЕ ИЗМЕНЕНИЕ: Выбираем все доступные организации по умолчанию
-          setSelectedOrganizationIds(fetchedOrgs.map(org => org.id));
+          setSelectedOrgIds(fetchedOrgs.map(org => org.id));
         } else {
-          setAllOrganizations([]);
-          setSelectedOrganizationIds([]);
+          setOrganizations([]);
+          setSelectedOrgIds([]);
         }
       } catch (e: any) {
         console.error("Ошибка загрузки организаций в контексте:", e);
@@ -70,7 +71,16 @@ export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ childr
     fetchUserOrganizations();
   }, [user]);
 
-  const value = { allOrganizations, selectedOrganizationIds, setSelectedOrganizationIds, isLoading, error };
+  const isAllSelected = organizations.length > 0 && selectedOrgIds.length === organizations.length;
+
+  const value = { 
+    organizations, 
+    selectedOrgIds, 
+    setSelectedOrgIds, 
+    isLoading, 
+    error,
+    isAllSelected
+  };
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
 };
