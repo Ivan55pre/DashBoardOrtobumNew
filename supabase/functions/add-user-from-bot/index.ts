@@ -1,24 +1,19 @@
-// index.rpc.ts — Edge‑функция, вызывающая SQL‑RPC invite_user_to_organization
+// add-user-from-bot/index.ts — Edge-функция для добавления СУЩЕСТВУЮЩЕГО пользователя в организацию.
 // Среда: Supabase Edge Functions (Deno, TypeScript)
-// Используются миграции из вашего проекта:
-//   - public.invite_user_to_organization(p_organization_id uuid, p_invitee_email text)
-// Предполагается, что функция в БД создана (см. миграции 0008).
 //
 // Что делает:
 // 1) CORS + preflight (OPTIONS).
-// 2) Принимает { organization_name, user_email, role? }. Роль опциональна, по умолчанию остаётся 'member'.
-// 3) Идёмпотентно находит/создаёт организацию по имени (таблица public.organizations).
-// 4) Вызывает SQL‑RPC invite_user_to_organization(...) — добавляет пользователя как 'member'.
-// 5) Если передана role='admin', повышает роль через UPDATE в public.organization_members (service‑key обходит RLS).
-// 6) Возвращает 200 и JSON‑результат.
+// 2) Проверяет API-ключ (x-api-key).
+// 3) Принимает { organization_name, user_email, role? }.
+// 4) Идемпотентно находит/создаёт организацию по имени.
+// 5) Находит ID пользователя по email. Если не найден — ошибка.
+// 6) Вызывает SQL-RPC invite_user_to_organization(...) для добавления пользователя.
+// 7) Если передана role='admin', повышает роль через UPDATE.
+// 8) Возвращает JSON-результат.
 //
-// Почему лучше так:
-// - Вся доменная логика приглашения и валидации почты централизована в SQL‑RPC.
-// - Из кода Edge‑функции уходит знание про структуру auth.users и т.п.
-// - Легче сопровождать: изменили RPC — поведение обновилось везде.
+// Отличие от `invite-user`: эта функция НЕ отправляет приглашений новым пользователям.
+// Она работает только с теми, кто уже зарегистрирован.
 //
-// Безопасность: используем сервисный ключ (SERVICE_ROLE) — он обходит RLS и позволяет вызывать security invoker RPC.
-// В ответах наружу не раскрываем детали ошибок/стек‑трейсы. В логи — можно писать больше подробностей.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -27,7 +22,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
 type Payload = {
@@ -53,6 +48,13 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Проверка API-ключа
+    const apiKeyHeader = req.headers.get("x-api-key");
+    const functionKey = Deno.env.get("FUNCTION_API_KEY");
+    if (!functionKey || apiKeyHeader !== functionKey) {
+      return json({ error: "Доступ запрещён" }, 403);
+    }
+
     // Parse/validate
     const payload = (await req.json().catch(() => null)) as Payload | null;
     if (!payload) return json({ error: "Некорректный JSON" }, 400);
@@ -76,7 +78,7 @@ Deno.serve(async (req: Request) => {
     }
     const sb = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false },
-      global: { headers: { "X-Client-Info": "edge-rpc-invite" } },
+      global: { headers: { "X-Client-Info": "edge-add-user-from-bot" } },
     });
 
     // 1) Идемпотентно получаем id организации по имени (создаём если нет)
@@ -121,46 +123,37 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 2) Вызываем SQL‑RPC: добавляет пользователя как 'member' или кидает ошибку, если email не найден
-    // SQL сигнатура: invite_user_to_organization(p_organization_id uuid, p_invitee_email text)
-    const { data: rpcData, error: rpcError } = await sb.rpc("invite_user_to_organization", {
+    // 2) Находим ID пользователя по email. В отличие от `invite-user`, мы не приглашаем новых.
+    const { data: userData, error: userError } = await sb.from("users").select("id").eq("email", user_email).maybeSingle();
+    if (userError || !userData?.id) {
+      console.error("User lookup error:", userError);
+      return json({ error: "Пользователь с таким email не найден в системе." }, 404);
+    }
+    const userId = userData.id;
+
+    // 3) Вызываем SQL-RPC для добавления пользователя в организацию
+    const { error: rpcError } = await sb.rpc("invite_user_to_organization", {
       p_organization_id: orgId,
       p_invitee_email: user_email,
     });
 
     if (rpcError) {
-      // Наиболее частые проблемы: "User with email ... not found", unique violation и т.п.
-      // Наружу даём безопасное сообщение, детали — в логи.
+      // Возможная ошибка: пользователь уже состоит в организации (unique violation).
       console.error("RPC invite_user_to_organization error:", rpcError);
-      return json({ error: "Не удалось пригласить пользователя. Убедитесь, что email зарегистрирован." }, 400);
+      return json({ error: "Не удалось добавить пользователя в организацию. Возможно, он уже является участником." }, 400);
     }
 
-    // 3) Если роль запрошена 'admin' — повышаем роль. RPC всегда создаёт 'member'.
+    // 4) Если роль запрошена 'admin' — повышаем роль.
     if (role === "admin") {
       const { error: updErr } = await sb
         .from("organization_members")
         .update({ role: "admin" })
         .eq("organization_id", orgId)
-        .eq("user_id", (rpcData as any)?.user_id ?? null) // если RPC не возвращает user_id, сделаем апдейт по email через join ниже
-        .select("id")
-        .maybeSingle();
+        .eq("user_id", userId);
 
       if (updErr) {
-        // fallback: обновим через join по auth.users.email
-        const { error: updByEmailErr } = await sb.rpc("exec_sql", {
-          // Для fallback нужен вспомогательный RPC, исполняющий произвольный SQL безопасно.
-          // Если у вас его нет — см. примечание ниже.
-          p_sql: `
-            update public.organization_members om
-            set role = 'admin'
-            from auth.users u
-            where om.organization_id = $1 and om.user_id = u.id and u.email = $2`,
-          p_params: [orgId, user_email],
-        });
-        if (updByEmailErr) {
-          console.warn("Не удалось повысить роль до admin:", updErr, updByEmailErr);
-          // Не критично: пользователь пригласился как member.
-        }
+        console.warn("Не удалось повысить роль до admin:", updErr);
+        // Не критично: пользователь был добавлен как 'member'.
       }
     }
 
@@ -169,7 +162,7 @@ Deno.serve(async (req: Request) => {
       organization_name,
       organization_id: orgId,
       user_email,
-      role_assigned: role, // фактически назначенная роль (возможно, 'member', если апгрейд не удался)
+      role_assigned: role,
       message:
         role === "admin"
           ? `Пользователь приглашён в "${organization_name}" и назначен администратором.`

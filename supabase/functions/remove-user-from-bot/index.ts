@@ -1,10 +1,9 @@
 // index.remove-user-from-bot.ts
 // Edge-функция для удаления пользователя из организации по команде бота
 // Вызывает SQL-RPC remove_user_from_organization(p_organization_id, p_user_email)
-// Отличие от admin-delete-user: нет проверки API-ключа FUNCTION_API_KEY,
-// вместо этого можно проверять auth.uid() (если бот авторизуется от имени пользователя)
 //
 // Требуется переменные окружения:
+//  - FUNCTION_API_KEY (для безопасности)
 //  - SUPABASE_URL
 //  - SUPABASE_SERVICE_ROLE_KEY
 
@@ -14,7 +13,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
 type Payload = {
@@ -38,7 +37,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1) Валидация входа
+    // 1) Проверка API-ключа (ОБЯЗАТЕЛЬНО для безопасности)
+    const apiKeyHeader = req.headers.get("x-api-key");
+    const functionKey = Deno.env.get("FUNCTION_API_KEY");
+    if (!functionKey || apiKeyHeader !== functionKey) {
+      return json({ error: "Доступ запрещён" }, 403);
+    }
+
+    // 2) Валидация входа
     const payload = (await req.json().catch(() => null)) as Payload | null;
     if (!payload) return json({ error: "Некорректный JSON" }, 400);
 
@@ -50,7 +56,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Укажите корректный user_email" }, 400);
     }
 
-    // 2) Подключение Supabase с Service Role (бот — системный клиент)
+    // 3) Подключение Supabase с Service Role (бот — системный клиент)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceKey) {
@@ -58,7 +64,7 @@ Deno.serve(async (req: Request) => {
     }
     const sb = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // 3) Получаем ID организации
+    // 4) Получаем ID организации
     const { data: orgData, error: orgErr } = await sb
       .from("organizations")
       .select("id")
@@ -73,7 +79,7 @@ Deno.serve(async (req: Request) => {
     }
     const orgId = orgData.id;
 
-    // 4) Вызываем RPC для удаления
+    // 5) Вызываем RPC для удаления
     const { error: rpcErr } = await sb.rpc("remove_user_from_organization", {
       p_organization_id: orgId,
       p_user_email: user_email,
@@ -83,7 +89,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Не удалось удалить пользователя из организации" }, 400);
     }
 
-    // 5) Ответ
+    // 6) Ответ
     return json({
       ok: true,
       organization_id: orgId,

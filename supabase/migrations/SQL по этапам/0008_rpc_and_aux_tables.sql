@@ -36,7 +36,7 @@ $$;
 
 -- RPC: приглашение по email
 create or replace function public.invite_user_to_organization(p_organization_id uuid, p_invitee_email text)
-returns void language plpgsql security invoker as $$
+returns void language plpgsql security definer as $$
 declare
     v_invitee_user_id uuid;
 begin
