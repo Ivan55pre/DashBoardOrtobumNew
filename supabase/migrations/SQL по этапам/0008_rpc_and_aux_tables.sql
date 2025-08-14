@@ -40,7 +40,7 @@ returns void language plpgsql security definer as $$
 declare
     v_invitee_user_id uuid;
 begin
-    select id into v_invitee_user_id from auth.users where email = p_invitee_email;
+    select id into v_invitee_user_id from auth.users where lower(email) = lower(p_invitee_email);
 
     if v_invitee_user_id is null then
         raise exception 'User with email % not found. Please ask them to sign up first.', p_invitee_email;

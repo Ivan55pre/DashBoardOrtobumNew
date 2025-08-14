@@ -59,16 +59,18 @@ Deno.serve(async (req: Request) => {
     const payload = (await req.json().catch(() => null)) as Payload | null;
     if (!payload) return json({ error: "Некорректный JSON" }, 400);
 
-    const { organization_name, user_email } = payload;
+    const { organization_name } = payload;
+    const user_email = payload.user_email;
     let role: "admin" | "member" = (payload.role ?? "member").toLowerCase() as any;
     if (!["admin", "member"].includes(role)) role = "member";
 
     if (!organization_name || organization_name.trim().length < 2) {
       return json({ error: "organization_name обязателен и должен быть не короче 2 символов" }, 400);
     }
-    if (!user_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user_email)) {
+    if (!user_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user_email.trim())) {
       return json({ error: "Укажите корректный user_email" }, 400);
     }
+    const normalizedEmail = user_email.trim().toLowerCase();
 
     // Supabase client (service role)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -124,7 +126,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 2) Находим ID пользователя по email. В отличие от `invite-user`, мы не приглашаем новых.
-    const { data: userData, error: userError } = await sb.from("users").select("id").eq("email", user_email).maybeSingle();
+    const { data: userData, error: userError } = await sb.from("users").select("id").eq("email", normalizedEmail).maybeSingle();
     if (userError || !userData?.id) {
       console.error("User lookup error:", userError);
       return json({ error: "Пользователь с таким email не найден в системе." }, 404);
@@ -134,7 +136,7 @@ Deno.serve(async (req: Request) => {
     // 3) Вызываем SQL-RPC для добавления пользователя в организацию
     const { error: rpcError } = await sb.rpc("invite_user_to_organization", {
       p_organization_id: orgId,
-      p_invitee_email: user_email,
+      p_invitee_email: normalizedEmail,
     });
 
     if (rpcError) {
@@ -161,7 +163,7 @@ Deno.serve(async (req: Request) => {
       ok: true,
       organization_name,
       organization_id: orgId,
-      user_email,
+      user_email: normalizedEmail,
       role_assigned: role,
       message:
         role === "admin"

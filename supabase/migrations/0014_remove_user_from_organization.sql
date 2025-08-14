@@ -18,7 +18,7 @@ begin
     -- Находим ID пользователя
     select id into v_user_id
     from auth.users
-    where email = p_user_email;
+    where lower(email) = lower(p_user_email);
 
     if v_user_id is null then
         raise exception 'Пользователь с email % не найден', p_user_email;
