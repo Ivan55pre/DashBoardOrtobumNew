@@ -69,17 +69,22 @@ const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organiz
   }
 
   const handleRemoveMember = async (member: Member) => {
+    if (!selectedOrg) {
+      setError('Для удаления участника должна быть выбрана организация.')
+      return
+    }
     if (!window.confirm(`Вы уверены, что хотите удалить ${member.email} из организации?`)) return
 
     setError(null)
     try {
-      const { error } = await supabase
-        .from('organization_members')
-        .delete()
-        .eq('id', member.member_id)
+      // Используем RPC-функцию, которая содержит всю логику, включая проверку на последнего админа.
+      const { error } = await supabase.rpc('remove_user_from_organization', {
+        p_organization_id: selectedOrg.id,
+        p_user_email: member.email,
+      })
 
       if (error) throw error
-      await fetchMembers()
+      await fetchMembers() // Обновить список после успешного удаления
     } catch (e: any) {
       setError(`Ошибка удаления: ${e.message}`)
     }

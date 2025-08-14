@@ -11,11 +11,19 @@ language plpgsql
 security definer
 as $$
 declare
+    v_caller_id uuid := auth.uid();
     v_user_id uuid;
     v_is_admin boolean;
     v_admin_count integer;
 begin
-    -- Находим ID пользователя
+    -- 1. ПРОВЕРКА ПРАВ: Вызывающий должен быть администратором этой организации.
+    -- Эта проверка необходима, т.к. функция выполняется с правами definer (superuser)
+    -- и обходит RLS-политики.
+    if not public.is_admin_of(p_organization_id, v_caller_id) then
+        raise exception 'Доступ запрещен: только администратор может удалять участников.';
+    end if;
+
+    -- 2. Находим ID пользователя по email
     select id into v_user_id
     from auth.users
     where lower(email) = lower(p_user_email);
@@ -24,25 +32,25 @@ begin
         raise exception 'Пользователь с email % не найден', p_user_email;
     end if;
 
-    -- Проверяем, является ли удаляемый администратором
+    -- 3. Проверяем, является ли удаляемый пользователь администратором
     select (role = 'admin') into v_is_admin
     from public.organization_members
     where organization_id = p_organization_id
       and user_id = v_user_id;
 
     if v_is_admin then
-        -- Считаем количество администраторов
+        -- 4. Если да, считаем общее количество администраторов в организации
         select count(*) into v_admin_count
         from public.organization_members
         where organization_id = p_organization_id
           and role = 'admin';
 
         if v_admin_count <= 1 then
-            raise exception 'Нельзя удалить последнего администратора организации';
+            raise exception 'Нельзя удалить последнего администратора организации.';
         end if;
     end if;
 
-    -- Удаляем запись из organization_members
+    -- 5. Удаляем запись из organization_members
     delete from public.organization_members
     where organization_id = p_organization_id
       and user_id = v_user_id;
