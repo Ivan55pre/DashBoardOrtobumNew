@@ -93,10 +93,10 @@ const OrganizationManagement: React.FC<OrganizationManagementProps> = ({ organiz
   const handleChangeRole = async (member: Member, newRole: 'admin' | 'member') => {
     setError(null)
     try {
-      const { error } = await supabase
-        .from('organization_members')
-        .update({ role: newRole })
-        .eq('id', member.member_id)
+      const { error } = await supabase.rpc('change_member_role', {
+        p_member_id: member.member_id,
+        p_new_role: newRole,
+      })
 
       if (error) throw error
       await fetchMembers()
