@@ -281,46 +281,6 @@ const TelegramDashboard: React.FC = () => {
           />
         </div>
 
-        {/* Summary Section */}
-        <div className="bg-white border-b border-gray-200 p-4 mt-4">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">
-            Детальная информация
-          </h2>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-sm text-gray-600">Денежные средства:</span>
-              <span className="text-sm font-medium text-gray-900">
-                {formatCurrency(dashboardData.cashBankTotal)}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-sm text-gray-600">Дебиторская задолженность:</span>
-              <span className="text-sm font-medium text-gray-900">
-                {formatCurrency(dashboardData.debtTotal)}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-sm text-gray-600">Стоимость запасов:</span>
-              <span className="text-sm font-medium text-gray-900">
-                {formatCurrency(dashboardData.inventoryTotal)}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm text-gray-600">План продаж выполнен на:</span>
-              <span className={`text-sm font-medium ${
-                dashboardData.planFactExecution >= 100 ? 'text-green-600' : 
-                dashboardData.planFactExecution >= 80 ? 'text-yellow-600' : 'text-red-600'
-              }`}>
-                {dashboardData.planFactExecution.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* Quick Actions */}
         <div className="bg-white p-4 mt-4">
           <h2 className="text-base font-semibold text-gray-900 mb-3">
