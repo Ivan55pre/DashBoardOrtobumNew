@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, ExternalLink, ChevronLeft } from 'lucide-rea
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useUserOrganizations } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
+import { useTelegram } from '../contexts/TelegramContext'
 import { formatCurrency } from '../utils/formatters'
 
 // Interface based on CashBankReport.tsx
@@ -28,6 +29,7 @@ interface CashBankReportData {
 const TelegramCashBankReport: React.FC = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { isTelegram } = useTelegram()
   const [data, setData] = useState<CashBankReportData[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -313,15 +315,17 @@ const TelegramCashBankReport: React.FC = () => {
         )}
       </div>
 
-      <div className="fixed bottom-4 right-4 z-20">
-        <button
-          onClick={handleDesktopRedirect}
-          className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
-          title="Перейти к Desktop версии"
-        >
-          <ExternalLink className="w-6 h-6" />
-        </button>
-      </div>
+      {isTelegram && (
+        <div className="fixed bottom-4 right-4 z-20">
+          <button
+            onClick={handleDesktopRedirect}
+            className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+            title="Перейти к Desktop версии"
+          >
+            <ExternalLink className="w-6 h-6" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

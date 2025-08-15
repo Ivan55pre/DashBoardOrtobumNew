@@ -5,7 +5,7 @@ import { supabase } from '../contexts/AuthContext'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency, formatPercent, getPercentColor } from '../utils/formatters'
-//import { useTelegram } from '../contexts/TelegramContext'
+import { useTelegram } from '../contexts/TelegramContext'
 
 interface DashboardData {
   cashBankTotal: number
@@ -27,7 +27,7 @@ const TelegramDashboard: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
-  //const { webApp } = useTelegram()
+  const { isTelegram } = useTelegram()
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     cashBankTotal: 0,
     debtTotal: 0,
@@ -342,15 +342,17 @@ const TelegramDashboard: React.FC = () => {
       </div>
 
       {/* Desktop redirect button */}
-      <div className="fixed bottom-4 right-4 z-20">
-        <button
-          onClick={handleDesktopRedirect}
-          className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
-          title="Перейти к Desktop версии"
-        >
-          <ExternalLink className="w-6 h-6" />
-        </button>
-      </div>
+      {isTelegram && (
+        <div className="fixed bottom-4 right-4 z-20">
+          <button
+            onClick={handleDesktopRedirect}
+            className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+            title="Перейти к Desktop версии"
+          >
+            <ExternalLink className="w-6 h-6" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
