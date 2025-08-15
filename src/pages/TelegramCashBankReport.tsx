@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useUserOrganizations } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
 import { formatCurrency } from '../utils/formatters'
@@ -25,11 +26,14 @@ interface CashBankReportData {
 }
 
 const TelegramCashBankReport: React.FC = () => {
+  const [searchParams] = useSearchParams()
   const [data, setData] = useState<CashBankReportData[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportDate, _setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeOrganizationName, setActiveOrganizationName] = useState<string | null>(null)
+  const reportDate = useMemo(() =>
+    searchParams.get('date') || new Date().toISOString().split('T')[0]
+  , [searchParams])
 
   const { organizations, isLoading: isLoadingOrgs, error: orgsError } = useUserOrganizations()
 
@@ -169,7 +173,7 @@ const TelegramCashBankReport: React.FC = () => {
   }
 
   const handleDesktopRedirect = () => {
-    const currentUrl = window.location.href.replace('/telegram-cash-bank', '/reports')
+    const currentUrl = window.location.href.replace(/\/telegram-cash-bank.*$/, '/reports')
     window.open(currentUrl, '_blank')
   }
 

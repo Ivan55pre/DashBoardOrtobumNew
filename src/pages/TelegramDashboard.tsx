@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3, ChevronsUpDown, Landmark } from 'lucide-react'
 import { supabase } from '../contexts/AuthContext'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
@@ -25,6 +25,7 @@ interface Organization {
 
 const TelegramDashboard: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   //const { webApp } = useTelegram()
   const [dashboardData, setDashboardData] = useState<DashboardData>({
@@ -40,7 +41,9 @@ const TelegramDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>('') // '' means "All", null means error/no orgs
-  const [reportDate, _setReportDate] = useState(new Date().toISOString().split('T')[0])
+  const [reportDate, setReportDate] = useState(
+    searchParams.get('date') || new Date().toISOString().split('T')[0]
+  )
 
   const loadDemoData = () => {
     const demoData = {
@@ -161,8 +164,14 @@ const TelegramDashboard: React.FC = () => {
     loadDashboardData()
   }, [selectedOrgId, organizations, reportDate])
 
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value
+    setReportDate(newDate)
+    setSearchParams({ date: newDate }, { replace: true })
+  }
+
   const handleDesktopRedirect = () => {
-    const currentUrl = window.location.href.replace('/telegram-dashboard', '/')
+    const currentUrl = window.location.href.replace(/\/telegram-dashboard.*$/, '/')
     window.open(currentUrl, '_blank')
   }
 
@@ -224,6 +233,16 @@ const TelegramDashboard: React.FC = () => {
           <p className="text-sm text-gray-500">
             Сводка по основным показателям
           </p>
+        </div>
+        <div>
+          <label htmlFor="report-date" className="block text-sm font-medium text-gray-500 mb-1">Дата отчета</label>
+          <input
+            id="report-date"
+            type="date"
+            value={reportDate}
+            onChange={handleDateChange}
+            className="w-full bg-gray-100 border border-gray-200 text-gray-700 py-2 px-3 rounded-lg leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+          />
         </div>
         <div className="relative">
           <select
@@ -289,7 +308,7 @@ const TelegramDashboard: React.FC = () => {
           
           <div className="space-y-2">
             <button
-              onClick={() => navigate('/telegram-cash-bank')}
+              onClick={() => navigate(`/telegram-cash-bank?date=${reportDate}`)}
               className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div className="flex items-center space-x-3">
@@ -299,7 +318,7 @@ const TelegramDashboard: React.FC = () => {
             </button>
             
             <button
-              onClick={() => navigate('/telegram-turnover')}
+              onClick={() => navigate(`/telegram-turnover?date=${reportDate}`)}
               className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div className="flex items-center space-x-3">
