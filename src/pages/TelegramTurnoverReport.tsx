@@ -292,11 +292,12 @@ const TelegramTurnoverReport: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center space-x-2">
-          <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
-            <ChevronLeft className="w-6 h-6 text-gray-600" />
+        <div className="flex items-center">
+          <button onClick={handleBack} className="flex items-center text-blue-500 hover:text-blue-600 transition-colors -ml-2 pr-2 py-1">
+            <ChevronLeft className="w-7 h-7" />
+            <span className="text-base font-medium">Назад</span>
           </button>
-          <h1 className="text-base font-semibold text-gray-900 truncate">
+          <h1 className="text-base font-semibold text-gray-900 truncate text-center flex-grow">
             {activeOrganizationName 
               ? `Запасы (${activeOrganizationName})` 
               : 'Товарные запасы и оборачиваемость'}
