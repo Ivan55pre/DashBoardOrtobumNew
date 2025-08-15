@@ -173,8 +173,7 @@ const TelegramDashboard: React.FC = () => {
   }
 
   const handleDesktopRedirect = () => {
-    const currentUrl = window.location.href.replace(/\/telegram-dashboard.*$/, '/')
-    window.open(currentUrl, '_blank')
+    window.open('/', '_blank')
   }
 
   const KPICard = ({ title, value, change, trend, icon: Icon, color }: any) => (

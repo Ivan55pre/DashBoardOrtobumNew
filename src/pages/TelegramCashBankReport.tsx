@@ -180,8 +180,7 @@ const TelegramCashBankReport: React.FC = () => {
   }
 
   const handleDesktopRedirect = () => {
-    const currentUrl = window.location.href.replace(/\/telegram-cash-bank.*$/, '/reports')
-    window.open(currentUrl, '_blank')
+    window.open('/reports', '_blank')
   }
 
   // renderRow function adapted from TelegramTurnoverReport and CashBankReport (mobile)

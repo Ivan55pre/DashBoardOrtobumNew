@@ -177,8 +177,7 @@ const TelegramTurnoverReport: React.FC = () => {
   }
 
   const handleDesktopRedirect = () => {
-    const currentUrl = window.location.href.replace(/\/telegram-turnover.*$/, '/reports')
-    window.open(currentUrl, '_blank')
+    window.open('/reports', '_blank')
   }
 
   const renderRow = (item: InventoryTurnoverData): React.ReactNode => {
