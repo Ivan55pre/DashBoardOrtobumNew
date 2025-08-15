@@ -245,7 +245,7 @@ const TelegramDashboard: React.FC = () => {
         {/* KPI Cards */}
         <div className="space-y-0">
           <KPICard
-            title="Остатки на РС и кассе"
+            title="Денежные средства"
             value={formatCurrency(dashboardData.cashBankTotal)}
             change={formatPercent(dashboardData.cashBankChange)}
             trend={dashboardData.cashBankChange}
@@ -294,17 +294,7 @@ const TelegramDashboard: React.FC = () => {
             >
               <div className="flex items-center space-x-3">
                 <Package className="w-5 h-5 text-gray-600" />
-                <span className="text-sm font-medium text-gray-900">Остатки товаров</span>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => navigate('/telegram-turnover')}
-              className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div className="flex items-center space-x-3">
-                <BarChart3 className="w-5 h-5 text-gray-600" />
-                <span className="text-sm font-medium text-gray-900">Оборачиваемость</span>
+                <span className="text-sm font-medium text-gray-900">Остатки товаров и оборачиваемость</span>
               </div>
             </button>
             
