@@ -7,13 +7,13 @@ const TelegramUpgrade: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-primary-500 text-white p-4 md:hidden">
+    <div className="fixed bottom-4 right-4 z-50 md:hidden">
       <button
         onClick={handleUpgrade}
-        className="w-full flex items-center justify-center space-x-2 py-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-colors"
+        className="flex items-center justify-center w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+        title="Перейти к полной версии в браузере"
       >
-        <ExternalLink className="w-4 h-4" />
-        <span>Перейти к полной версии</span>
+        <ExternalLink className="w-6 h-6" />
       </button>
     </div>
   )
