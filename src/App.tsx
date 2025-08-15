@@ -10,6 +10,7 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import TelegramTurnoverReport from './pages/TelegramTurnoverReport'
+import TelegramCashBankReport from './pages/TelegramCashBankReport'
 import TelegramDashboard from './pages/TelegramDashboard'
 import ProtectedRoute from './components/Auth/ProtectedRoute'
 import ProtectedLayout from './components/Layout/ProtectedLayout'
@@ -27,6 +28,11 @@ function App() {
                   <Route path="/telegram-turnover" element={
                     <ProtectedRoute>
                       <TelegramTurnoverReport />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/telegram-cash-bank" element={
+                    <ProtectedRoute>
+                      <TelegramCashBankReport />
                     </ProtectedRoute>
                   } />
                   <Route path="/telegram-dashboard" element={

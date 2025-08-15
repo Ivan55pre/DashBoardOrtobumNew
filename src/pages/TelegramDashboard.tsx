@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3, ChevronsUpDown } from 'lucide-react'
+import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3, ChevronsUpDown, Landmark } from 'lucide-react'
 import { supabase } from '../contexts/AuthContext'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
 import { useAuth } from '../contexts/AuthContext'
@@ -284,10 +284,20 @@ const TelegramDashboard: React.FC = () => {
         {/* Quick Actions */}
         <div className="bg-white p-4 mt-4">
           <h2 className="text-base font-semibold text-gray-900 mb-3">
-            Быстрые действия
+            Подробные отчеты
           </h2>
           
           <div className="space-y-2">
+            <button
+              onClick={() => navigate('/telegram-cash-bank')}
+              className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                <Landmark className="w-5 h-5 text-gray-600" />
+                <span className="text-sm font-medium text-gray-900">Денежные средства</span>
+              </div>
+            </button>
+            
             <button
               onClick={() => navigate('/telegram-turnover')}
               className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
