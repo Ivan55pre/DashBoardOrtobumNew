@@ -32,36 +32,43 @@ const GlobalFilters: React.FC = () => {
 
         <OrganizationFilter />
 
-        {/* Date Range Picker for the new chart - using native inputs */}
+        {/* Date Range Picker for charts */}
         <div>
-          <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Начало периода графиков
-          </label>
-          <input
-            type="date"
-            id="start-date"
-            value={dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
-            onChange={(e) => setDateRange(prev => ({
-              from: e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined,
-              to: prev?.to
-            }))}
-            className="form-input block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-dark-800 dark:border-gray-600 dark:text-white"
-          />
-        </div>
-        <div>
-          <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Конец периода
-          </label>
-          <input
-            type="date"
-            id="end-date"
-            value={dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
-            onChange={(e) => setDateRange(prev => ({
-              from: prev?.from,
-              to: e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined
-            }))}
-            className="form-input block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-dark-800 dark:border-gray-600 dark:text-white"
-          />
+          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Период графиков
+          </span>
+          <div className="flex items-end space-x-2">
+            <div>
+              <label htmlFor="start-date" className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                с
+              </label>
+              <input
+                type="date"
+                id="start-date"
+                value={dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
+                onChange={(e) => setDateRange(prev => ({
+                  from: e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined,
+                  to: prev?.to
+                }))}
+                className="form-input block w-full max-w-[180px] pl-3 pr-2 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-dark-800 dark:border-gray-600 dark:text-white"
+              />
+            </div>
+            <div>
+              <label htmlFor="end-date" className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                по
+              </label>
+              <input
+                type="date"
+                id="end-date"
+                value={dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
+                onChange={(e) => setDateRange(prev => ({
+                  from: prev?.from,
+                  to: e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined
+                }))}
+                className="form-input block w-full max-w-[180px] pl-3 pr-2 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-dark-800 dark:border-gray-600 dark:text-white"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
