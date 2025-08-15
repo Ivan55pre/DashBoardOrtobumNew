@@ -19,7 +19,11 @@ const ReportDateContext = createContext<ReportDateContextType | undefined>(undef
 // Создаем провайдер, который будет "оберткой" для компонентов
 export const ReportDateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Состояние для хранения выбранной даты
-  const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [reportDate, setReportDate] = useState<string>(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  });
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date()

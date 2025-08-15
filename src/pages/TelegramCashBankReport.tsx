@@ -31,9 +31,11 @@ const TelegramCashBankReport: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeOrganizationName, setActiveOrganizationName] = useState<string | null>(null)
-  const reportDate = useMemo(() =>
-    searchParams.get('date') || new Date().toISOString().split('T')[0]
-  , [searchParams])
+  const reportDate = useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return searchParams.get('date') || yesterday.toISOString().split('T')[0];
+  }, [searchParams])
 
   const { organizations, isLoading: isLoadingOrgs, error: orgsError } = useUserOrganizations()
 

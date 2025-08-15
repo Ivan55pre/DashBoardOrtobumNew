@@ -41,9 +41,11 @@ const TelegramDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>('') // '' means "All", null means error/no orgs
-  const [reportDate, setReportDate] = useState(
-    searchParams.get('date') || new Date().toISOString().split('T')[0]
-  )
+  const [reportDate, setReportDate] = useState(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return searchParams.get('date') || yesterday.toISOString().split('T')[0];
+  });
 
   const loadDemoData = () => {
     const demoData = {
