@@ -343,13 +343,13 @@ const TelegramDashboard: React.FC = () => {
       </div>
 
       {/* Desktop redirect button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+      <div className="fixed bottom-4 right-4 z-20">
         <button
           onClick={handleDesktopRedirect}
-          className="w-full flex items-center justify-center space-x-2 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+          title="Перейти к Desktop версии"
         >
-          <ExternalLink className="w-4 h-4" />
-          <span>Перейти к Desktop версии</span>
+          <ExternalLink className="w-6 h-6" />
         </button>
       </div>
     </div>

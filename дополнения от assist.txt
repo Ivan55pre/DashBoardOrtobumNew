@@ -61,3 +61,5 @@ npm install @dnd-kit/core @dnd-kit/sortable
 
 ***
 Активируй кнопку "Задолженности" и создай для нее страницу отчета, аналогичную `TelegramCashBankReport`.
+
+Замени демо-данные для динамики показателей на дашборде Telegram на реальные данные из функции `get_dashboard_widget_data`.

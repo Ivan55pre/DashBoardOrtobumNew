@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, ChevronRight, ExternalLink, Menu } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { ChevronDown, ChevronRight, ExternalLink, ChevronLeft } from 'lucide-react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useUserOrganizations } from '../hooks/useUserOrganizations'
 import { useReportItems } from '../hooks/useReportItems'
 import { formatCurrency, formatNumber, formatPercent, getPercentColor } from '../utils/formatters'
@@ -27,6 +27,7 @@ interface InventoryTurnoverData {
 const TelegramTurnoverReport: React.FC = () => {
   //const { webApp } = useTelegram()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [data, setData] = useState<InventoryTurnoverData[]>([])
   const [loading, setLoading] = useState(true) // Combined loading state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -171,6 +172,10 @@ const TelegramTurnoverReport: React.FC = () => {
     setExpandedRows(newExpanded)
   }
 
+  const handleBack = () => {
+    navigate(`/telegram-dashboard?date=${reportDate}`)
+  }
+
   const handleDesktopRedirect = () => {
     const currentUrl = window.location.href.replace(/\/telegram-turnover.*$/, '/reports')
     window.open(currentUrl, '_blank')
@@ -286,9 +291,11 @@ const TelegramTurnoverReport: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center space-x-3">
-          <Menu className="w-6 h-6 text-gray-600" />
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
+        <div className="flex items-center space-x-2">
+          <button onClick={handleBack} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+            <ChevronLeft className="w-6 h-6 text-gray-600" />
+          </button>
           <h1 className="text-base font-semibold text-gray-900 truncate">
             {activeOrganizationName 
               ? `Запасы (${activeOrganizationName})` 
@@ -311,13 +318,13 @@ const TelegramTurnoverReport: React.FC = () => {
       </div>
 
       {/* Desktop redirect button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+      <div className="fixed bottom-4 right-4 z-20">
         <button
           onClick={handleDesktopRedirect}
-          className="w-full flex items-center justify-center space-x-2 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          className="flex items-center justify-center w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+          title="Перейти к Desktop версии"
         >
-          <ExternalLink className="w-4 h-4" />
-          <span>Перейти к Desktop версии</span>
+          <ExternalLink className="w-6 h-6" />
         </button>
       </div>
     </div>
