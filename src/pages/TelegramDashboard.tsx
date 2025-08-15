@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ExternalLink, TrendingUp, TrendingDown, Banknote, CreditCard, Package, BarChart3, ChevronsUpDown } from 'lucide-react'
 import { supabase } from '../contexts/AuthContext'
 import NoOrganizationState from '../components/Layout/NoOrganizationState'
@@ -23,6 +24,7 @@ interface Organization {
 }
 
 const TelegramDashboard: React.FC = () => {
+  const navigate = useNavigate()
   const { user } = useAuth()
   //const { webApp } = useTelegram()
   const [dashboardData, setDashboardData] = useState<DashboardData>({
@@ -326,24 +328,33 @@ const TelegramDashboard: React.FC = () => {
           </h2>
           
           <div className="space-y-2">
-            <button className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <button
+              onClick={() => navigate('/telegram-turnover')}
+              className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            >
               <div className="flex items-center space-x-3">
                 <Package className="w-5 h-5 text-gray-600" />
                 <span className="text-sm font-medium text-gray-900">Остатки товаров</span>
               </div>
             </button>
             
-            <button className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <button
+              onClick={() => navigate('/telegram-turnover')}
+              className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            >
               <div className="flex items-center space-x-3">
                 <BarChart3 className="w-5 h-5 text-gray-600" />
                 <span className="text-sm font-medium text-gray-900">Оборачиваемость</span>
               </div>
             </button>
             
-            <button className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <button
+              disabled
+              className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <div className="flex items-center space-x-3">
                 <CreditCard className="w-5 h-5 text-gray-600" />
-                <span className="text-sm font-medium text-gray-900">Задолженности</span>
+                <span className="text-sm font-medium text-gray-900">Задолженности (в разработке)</span>
               </div>
             </button>
           </div>
