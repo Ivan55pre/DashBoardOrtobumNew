@@ -35,7 +35,7 @@ begin
             v_report_id, item->>'account_id', item->>'parent_account_id', item->>'account_name', item->>'subconto',
             (item->>'balance_start')::decimal(15,2), (item->>'income_amount')::decimal(15,2),
             (item->>'expense_amount')::decimal(15,2), (item->>'balance_current')::decimal(15,2),
-            item->>'account_type', (item->>'level')::integer, item->>'currency', (item->>'is_total_row')::boolean, null
+            item->>'account_type', (item->>'level')::integer, item->>'currency', coalesce((item->>'is_total_row')::boolean, false), null
         ) returning id into v_item_id;
 
         if item->>'account_id' is not null and trim(item->>'account_id') != '' then
@@ -147,8 +147,8 @@ begin
             is_total_row, period_type, level, is_expandable
         ) values (
             v_report_id, item->>'category_name', (item->>'plan_amount')::decimal, (item->>'fact_amount')::decimal,
-            (item->>'execution_percent')::decimal, (item->>'is_total_row')::boolean, item->>'period_type',
-            (item->>'level')::integer, (item->>'is_expandable')::boolean
+            (item->>'execution_percent')::decimal, coalesce((item->>'is_total_row')::boolean, false), item->>'period_type',
+            (item->>'level')::integer, coalesce((item->>'is_expandable')::boolean, false)
         ) returning id into v_item_id;
 
         insert into temp_category_map (category_name, item_id) values (item->>'category_name', v_item_id);
