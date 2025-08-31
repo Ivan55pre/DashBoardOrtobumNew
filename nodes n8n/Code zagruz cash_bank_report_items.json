@@ -1,8 +1,28 @@
+// Вспомогательная функция для преобразования древовидной структуры в плоский список
+function flattenTree(nodes, parentAccountId = null) {
+  let flatList = [];
+  if (!Array.isArray(nodes)) {
+    // Если на вход пришел не массив, возвращаем пустой список
+    return [];
+  }
+  nodes.forEach(node => {
+    const { children, ...item } = node;
+    
+    // Добавляем текущий элемент в список, проставляя ID родителя
+    const flatItem = { ...item, parent_account_id: parentAccountId };
+    flatList.push(flatItem);
+
+    // Если есть дочерние элементы, рекурсивно обрабатываем их
+    if (children && children.length > 0) {
+      flatList = flatList.concat(flattenTree(children, item.account_id));
+    }
+  });
+  return flatList;
+}
+
 // Получаем все элементы, пришедшие от предыдущего узла (HTTP Request)
 const allJsons = items.map(item => item.json);
 const allItems = allJsons.flatMap(obj => obj.body || []);
-
-//const allItems = items.map(item => item.json); // было или когда только массив без обвеса
 
 // Группируем элементы по organization_name
 const groupedItems = allItems.reduce((groups, item) => {
@@ -16,11 +36,14 @@ const groupedItems = allItems.reduce((groups, item) => {
 }, {});
 
 // Формируем выходные данные для каждого уникального отчета
-const output = Object.entries(groupedItems).map(([organization, items]) => {
+const output = Object.entries(groupedItems).map(([organization, treeItems]) => {
   // Берем reportDate из первого элемента группы, если есть, иначе используем текущую дату
-  const reportDate = items[0].reportDate || new Date().toISOString().split('T')[0];
+  const reportDate = treeItems[0].reportDate || new Date().toISOString().split('T')[0];
 
-  const reportItems = items.map(item => {
+  // Преобразуем дерево в плоский список, который ожидает SQL-функция
+  const flatItems = flattenTree(treeItems);
+
+  const reportItems = flatItems.map(item => {
     let accountType = 'bank';
     const accountName = (item.account_name || '').toLowerCase();
 
@@ -62,4 +85,3 @@ const output = Object.entries(groupedItems).map(([organization, items]) => {
 });
 
 return output;
-// return [{ json: { allItems } }];
