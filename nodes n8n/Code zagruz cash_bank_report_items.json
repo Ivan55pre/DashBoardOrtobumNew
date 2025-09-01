@@ -1,109 +1,109 @@
-// ===== helpers =====
-function toFloat(x){ const n = parseFloat(String(x ?? '').toString().replace(',', '.')); return isFinite(n) ? n : 0; }
-function toInt(x, d=1){ const n = parseInt(x ?? d, 10); return Number.isFinite(n) ? n : d; }
-
-function classifyAccountType(item){
-  const name = (item.account_name || '').toLowerCase();
-  if (item.is_total_row) return 'total';
-  if (!name) return 'total';
-  if (name.includes('касса') || name.includes('cash')) return 'cash';
-  return 'bank';
-}
-
-// ====== МИНИМАЛЬНО ИЗМЕНЁННАЯ версия flattenTree ======
-// Было: работала по полю children и переносила входные account_id/parent_account_id.
-// Стало: читаем детей из "Строки"; генерируем синтетические account_id и parent_account_id;
-//         дополнительно собираем path / path_names.
-function flattenTree(nodes, parentAccountId = null, state = { seq: 0 }, parentPathNames = []) {
+// Helper function to flatten a tree structure, generate parent-child IDs,
+// and filter out the special root node.
+function flattenAndProcess(nodes, parentId = null) {
   let flatList = [];
-  if (!Array.isArray(nodes)) return [];
+  if (!nodes || !Array.isArray(nodes)) {
+    return flatList;
+  }
 
-  nodes.forEach(node => {
-    // отделим детей как раньше, но поле теперь "Строки"
-    const { Строки: children, ...item } = node;
+  for (const node of nodes) {
+    // Use 'НомерПоПорядку' as the unique identifier for the current node.
+    const currentId = node.НомерПоПорядку ? String(node.НомерПоПорядку) : null;
 
-    // синтетический account_id
-    const account_id = ++state.seq;
+    // Check if the current node is the special root node.
+    const isRootNode = node.Организация === null && node.organization_name === 'Всеорганизации';
 
-    // нормализуем уровень
-    const level = toInt(item.level ?? item['Уровень'] ?? 1);
-
-    // имя для пути
-    const account_name = item.account_name ?? item['ПечСубконто1БанкСчет'] ?? null;
-    const path_names = [...parentPathNames, account_name].filter(Boolean);
-    const path = path_names.join(' / '); // человекочитаемый путь
-
-    // собираем плоский элемент (минимально меняем остальной код)
-    const flatItem = {
-      ...item,
-      account_id,
-      parent_account_id: parentAccountId,
-      // нормализованные поля:
-      level,
-      account_name,
-      // полезно для UI/проверок:
-      path,
-      path_names
-    };
-    flatList.push(flatItem);
-
-    // рекурсия по детям из "Строки"
-    const kids = Array.isArray(children) ? children : [];
-    if (kids.length) {
-      flatList = flatList.concat(
-        flattenTree(kids, account_id, state, path_names)
-      );
+    // Add the node to the list unless it's the special root node.
+    if (!isRootNode) {
+      const newItem = {
+        ...node,
+        account_id: currentId,
+        parent_account_id: parentId ? String(parentId) : null,
+      };
+      flatList.push(newItem);
     }
-  });
-
+    
+    // Recursively process children (now named 'Строки').
+    if (node.Строки && node.Строки.length > 0) {
+      // If the current node was the root, its children have no parent (parentId = null).
+      // Otherwise, they inherit the current node's ID as their parent.
+      const childsParentId = isRootNode ? null : currentId;
+      flatList = flatList.concat(flattenAndProcess(node.Строки, childsParentId));
+    }
+  }
   return flatList;
 }
 
-// ===== основной код узла =====
-const allJsons = items.map(item => item.json);
-const allItems = allJsons.flatMap(obj => obj.body || []);
 
-// группируем по organization_name
+// --- Main Logic ---
+
+// 1. Get the root nodes from the input. The input is now a tree.
+const rootNodes = items.flatMap(item => item.json.body || []);
+
+// 2. Flatten the tree(s) into a list of items.
+// This function also generates `account_id` and `parent_account_id` and filters the root.
+const allItems = flattenAndProcess(rootNodes);
+
+// 3. Group the flat items by 'organization_name'.
 const groupedItems = allItems.reduce((groups, item) => {
   const organization = item.organization_name;
-  (groups[organization] ||= []).push(item);
+
+  // Skip items that don't have an organization name.
+  if (!organization) {
+    return groups;
+  }
+
+  if (!groups[organization]) {
+    groups[organization] = [];
+  }
+  groups[organization].push(item);
   return groups;
 }, {});
 
-const output = Object.entries(groupedItems).map(([organization, treeItems]) => {
-  const reportDate = treeItems[0].reportDate || new Date().toISOString().split('T')[0];
+// 4. For each organization, create a database query payload.
+const output = Object.entries(groupedItems).map(([organization, orgItems]) => {
+  // Use the reportDate from the first item, or default to today.
+  const reportDate = orgItems[0].reportDate || new Date().toISOString().split('T')[0];
 
-  // ВАЖНО: теперь flattenTree читает "Строки" и генерирует account_id/parent_account_id
-  const flatItems = flattenTree(treeItems);
+  const reportItems = orgItems.map(item => {
+    let accountType = 'bank'; // Default account type
+    const accountName = (item.account_name || '').toLowerCase();
 
-  const reportItems = flatItems.map(item => {
-    const account_type = classifyAccountType(item);
+    if (item.is_total_row) {
+      accountType = 'total';
+    } else if (accountName.includes('касса') || accountName.includes('cash')) {
+      accountType = 'cash';
+    } else if (!accountName) {
+      // This handles grouping rows that are not explicitly 'total' rows.
+      // Per original logic, they are marked as 'total'.
+      accountType = 'total';
+    }
+
     return {
       account_name: item.account_name,
       subconto: item.subconto || null,
-      balance_start: toFloat(item['СуммаНачальныйОстаток']),
-      income_amount: toFloat(item['СуммаОборотДт']),
-      expense_amount: toFloat(item['СуммаОборотКт']),
-      balance_current: toFloat(item['СуммаКонечныйОстаток']),
-      account_type,
-      level: toInt(item.level ?? item['Уровень'] ?? 1),
+      balance_start: parseFloat(item.СуммаНачальныйОстаток) || 0,
+      income_amount: parseFloat(item.СуммаОборотДт) || 0,
+      expense_amount: parseFloat(item.СуммаОборотКт) || 0,
+      balance_current: parseFloat(item.СуммаКонечныйОстаток) || 0,
+      account_type: accountType,
+      level: parseInt(item.level || item.Уровень || 1, 10),
       currency: item.currency || 'RUB',
       is_total_row: Boolean(item.is_total_row),
-
-      // синтетическая иерархия с прежними ИМЕНАМИ колонок:
+      // These IDs are generated by the flattenAndProcess function.
       account_id: item.account_id,
-      parent_account_id: item.parent_account_id,
-
-      // «человеческие» пути:
-      path: item.path,
-      path_names: item.path_names
+      parent_account_id: item.parent_account_id
     };
   });
 
   return {
     json: {
       query: 'SELECT public.upsert_cash_bank_report($1, $2, $3::jsonb)',
-      params: [organization, reportDate, JSON.stringify(reportItems)],
+      params: [
+        organization,
+        reportDate,
+        JSON.stringify(reportItems)
+      ],
       status: 'ready_for_postgres'
     }
   };

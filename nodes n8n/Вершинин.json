@@ -19,7 +19,7 @@
         "id_Субконто1": "3d9b5c97-0570-11f0-967e-2c6dc1e036d0",
         "id_Субконто2": "",
         "НомерПоПорядку": 1,
-        "organization_name": "ВершининДмитрийБорисовичИП",
+        "organization_name": "Всеорганизации",
         "is_total_row": true,
         "level": 1,
         "subconto": "",
@@ -339,14 +339,14 @@
           }
         ]
       }
-    ],
+     ],
     "headers": {
       "content-type": "text/html; charset=utf-8,application/json;  charset=utf-8",
       "server": "Microsoft-IIS/10.0",
       "x-powered-by": "ASP.NET",
-      "date": "Mon, 01 Sep 2025 09:43:18 GMT",
+      "date": "Mon, 01 Sep 2025 15:53:48 GMT",
       "connection": "close",
-      "content-length": "379770"
+      "content-length": "379766"
     },
     "statusCode": 200,
     "statusMessage": "OK"
