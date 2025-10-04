@@ -34,7 +34,8 @@ create extension if not exists vector;
 create table if not exists public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
-  external_id text unique
+  external_id text unique,
+  url text
 );
 
 -- Членство пользователей в организациях
