@@ -1,6 +1,6 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { BarChart3, FileText, Settings, Home, X } from 'lucide-react'
+import { BarChart3, FileText, Settings, Home, X, MessageCircle } from 'lucide-react'
 
 interface SidebarProps {
   isOpen: boolean
@@ -11,6 +11,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const navItems = [
     { to: '/', icon: Home, label: 'Dashboard' },
     { to: '/reports', icon: FileText, label: 'Отчеты' },
+    { to: '/ai-chat', icon: MessageCircle, label: 'AI Чат' },
     { to: '/settings', icon: Settings, label: 'Настройки' },
   ]
 

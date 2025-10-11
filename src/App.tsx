@@ -5,6 +5,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { TelegramProvider } from './contexts/TelegramContext'
+import AIChat from './pages/AIChat'
 import Dashboard from './pages/Dashboard'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
@@ -44,6 +45,7 @@ function App() {
                   <Route element={<ProtectedLayout />}>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/ai-chat" element={<AIChat />} />
                     <Route path="/settings" element={<Settings />} />
                   </Route>
                 </Routes>
