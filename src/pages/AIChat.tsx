@@ -1,10 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useOrganizations } from '../contexts/OrganizationContext';
+import { useReportDate } from '../contexts/ReportDateContext';
 
 const AIChat = () => {
+  const { user } = useAuth();
+  const { organizations, selectedOrgIds } = useOrganizations();
+  const { reportDate, dateRange } = useReportDate();
   const [messages, setMessages] = useState<{id: number, text: string, sender: 'user' | 'ai'}[]>([]);
-  const [inputText, setInputText] = useState('');
+ const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [includeContext, setIncludeContext] = useState(true);
+  const [contextOptions, setContextOptions] = useState({
+    organization: true,
+    reportDate: true,
+    dateRange: true,
+    user: true
+  });
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -30,13 +43,34 @@ const AIChat = () => {
     setIsLoading(true);
 
     try {
-      // Отправляем запрос к webhook n8n
+      // Подготовка контекста приложения, если включено
+      const appContext = includeContext ? {
+        organization: contextOptions.organization ? {
+          selected: selectedOrgIds,
+          available: organizations.map(org => ({ id: org.id, name: org.name }))
+        } : undefined,
+        reportDate: contextOptions.reportDate ? reportDate : undefined,
+        dateRange: contextOptions.dateRange && dateRange ? {
+          from: dateRange.from ? dateRange.from.toISOString() : undefined,
+          to: dateRange.to ? dateRange.to.toISOString() : undefined
+        } : undefined,
+        user: contextOptions.user ? {
+          id: user?.id,
+          email: user?.email,
+          role: user?.role
+        } : undefined
+      } : null;
+
+      // Отправляем запрос к webhook n8n с контекстом приложения и Auth данными пользователя
       const response = await fetch('https://n8n.preivan.ru/webhook/Julianna_AI', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: inputText })
+        body: JSON.stringify({
+          text: inputText,
+          context: appContext
+        })
       });
 
       if (response.ok) {
@@ -128,13 +162,67 @@ const AIChat = () => {
       </div>
 
       <div className="mt-auto">
+        <div className="flex items-center mb-2">
+          <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={includeContext}
+              onChange={(e) => setIncludeContext(e.target.checked)}
+              className="rounded text-primary-500 focus:ring-primary-500"
+            />
+            <span>Включить контекст приложения</span>
+          </label>
+        </div>
+        {includeContext && (
+          <div className="mb-3 p-3 bg-gray-50 dark:bg-dark-700 rounded-lg border border-gray-200 dark:border-gray-600">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Настройки контекста:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={contextOptions.organization}
+                  onChange={(e) => setContextOptions(prev => ({...prev, organization: e.target.checked}))}
+                  className="rounded text-primary-500 focus:ring-primary-500"
+                />
+                <span>Организация</span>
+              </label>
+              <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={contextOptions.reportDate}
+                  onChange={(e) => setContextOptions(prev => ({...prev, reportDate: e.target.checked}))}
+                  className="rounded text-primary-50 focus:ring-primary-500"
+                />
+                <span>Дата отчета</span>
+              </label>
+              <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={contextOptions.dateRange}
+                  onChange={(e) => setContextOptions(prev => ({...prev, dateRange: e.target.checked}))}
+                  className="rounded text-primary-500 focus:ring-primary-500"
+                />
+                <span>Период графиков</span>
+              </label>
+              <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={contextOptions.user}
+                  onChange={(e) => setContextOptions(prev => ({...prev, user: e.target.checked}))}
+                  className="rounded text-primary-50 focus:ring-primary-500"
+                />
+                <span>Данные пользователя</span>
+              </label>
+            </div>
+          </div>
+        )}
         <div className="flex items-end space-x-2">
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Введите ваш вопрос..."
-            className="flex-1 border border-gray-300 dark:border-dark-600 rounded-lg p-3 min-h-[100px] max-h-40 resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-700 dark:text-white"
+            className="flex-1 border border-gray-300 dark:border-dark-600 rounded-lg p-3 min-h-[100px] max-h-40 resize-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-70 dark:text-white"
             disabled={isLoading}
           />
           <button
